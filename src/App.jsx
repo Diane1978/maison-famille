@@ -36,37 +36,11 @@ function weekOf(ref, off=0) {
   return Array.from({length:7},(_,i)=>{ const dd=new Date(d); dd.setDate(dd.getDate()+i); return dd; });
 }
 
-const INIT_MEMBERS = [
-  {id:'m1',name:'Maman',color:'#C8604A',emoji:'👩'},
-  {id:'m2',name:'Emma',color:'#7BA68A',emoji:'👧'},
-  {id:'m3',name:'Léa',color:'#D4956A',emoji:'🧒'},
-  {id:'m4',name:'Zoé',color:'#5B8DB8',emoji:'👶'},
-];
 
-const INIT_TASKS = [
-  {id:'t1',name:'Vaisselle',cat:'Cuisine',freq:'daily',days:[0,1,2,3,4,5,6],dom:null,est:15,color:'#C8604A'},
-  {id:'t2',name:'Aspirateur',cat:'Ménage',freq:'weekly',days:[5],dom:null,est:30,color:'#7BA68A'},
-  {id:'t3',name:'Linge',cat:'Ménage',freq:'weekly',days:[1,4],dom:null,est:45,color:'#D4956A'},
-  {id:'t4',name:'Cuisine du soir',cat:'Cuisine',freq:'daily',days:[0,1,2,3,4,5,6],dom:null,est:40,color:'#5B8DB8'},
-  {id:'t5',name:'Poubelles',cat:'Ménage',freq:'weekly',days:[2],dom:null,est:10,color:'#9B7BB8'},
-  {id:'t6',name:'Salle de bain',cat:'Ménage',freq:'weekly',days:[6],dom:null,est:25,color:'#B8A06B'},
-  {id:'t7',name:'Courses',cat:'Approvisionnement',freq:'weekly',days:[5],dom:null,est:60,color:'#C8604A'},
-  {id:'t8',name:'Sol cuisine',cat:'Ménage',freq:'weekly',days:[6],dom:null,est:20,color:'#7BA68A'},
-];
 
-function genDemo(members, tasks) {
-  const comps = [];
-  for (let ago=28; ago>0; ago--) {
-    const d = new Date(today); d.setDate(d.getDate()-ago);
-    const ds = fmt(d);
-    tasks.forEach(t => {
-      if (!isDue(t,d)||Math.random()<0.12) return;
-      const m = members[Math.floor(Math.random()*members.length)];
-      comps.push({id:uid(),taskId:t.id,memberId:m.id,date:ds,min:Math.max(5,Math.round(t.est*(0.7+Math.random()*0.6)))});
-    });
-  }
-  return comps;
-}
+
+
+
 
 const CAT_BG = {Cuisine:'#FFF0EB',Ménage:'#EDFAF3',Approvisionnement:'#EBF3FA',Général:'#F5F0FA'};
 const CAT_TX = {Cuisine:'#C8604A',Ménage:'#7BA68A',Approvisionnement:'#5B8DB8',Général:'#9B7BB8'};
@@ -77,9 +51,9 @@ const inp = {border:'1.5px solid #E8DFCF',borderRadius:10,padding:'9px 12px',fon
 
 export default function App() {
   const [tab, setTab] = useState('today');
-  const [members, setMembers] = useState(INIT_MEMBERS);
-  const [tasks, setTasks] = useState(INIT_TASKS);
-  const [comps, setComps] = useState(() => genDemo(INIT_MEMBERS, INIT_TASKS));
+  const [members, setMembers] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [comps, setComps] = useState([]);
   const [wkOff, setWkOff] = useState(0);
   const [statMode, setStatMode] = useState('person');
 
