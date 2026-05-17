@@ -7,7 +7,7 @@ const uid = () => Math.random().toString(36).slice(2,9);
 const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const today = new Date();
 const todayStr = fmt(today);
-const dow = d => (d.getDay()+6)%7; // 0=Lun
+const dow = d => (d.getDay()+6)%7;
 
 const FREQ = { daily:'Quotidien', weekly:'Hebdomadaire', biweekly:'Bimensuel', monthly:'Mensuel', quarterly:'Trimestriel', biannual:'Semestriel', yearly:'Annuel' };
 const DS = ['Lu','Ma','Me','Je','Ve','Sa','Di'];
@@ -21,7 +21,7 @@ function isDue(t, date) {
     if (!t.days || !t.days.includes(dow(date))) return false;
     const anchor = new Date(t.anchor || todayStr);
     const diffDays = Math.round((date - anchor) / 864e5);
-    return diffDays % 14 === 0 || diffDays % 14 === 0;
+    return diffDays % 14 === 0;
   }
   if (t.freq==='monthly') return t.dom===date.getDate();
   if (t.freq==='quarterly') return date.getDate()===t.dom && [0,3,6,9].includes(date.getMonth());
@@ -70,7 +70,6 @@ function genDemo(members, tasks) {
 
 const CAT_BG = {Cuisine:'#FFF0EB',Ménage:'#EDFAF3',Approvisionnement:'#EBF3FA',Général:'#F5F0FA'};
 const CAT_TX = {Cuisine:'#C8604A',Ménage:'#7BA68A',Approvisionnement:'#5B8DB8',Général:'#9B7BB8'};
-
 const card = {background:'#fff',borderRadius:16,padding:'14px 18px',boxShadow:'0 2px 12px rgba(61,46,30,0.07)',marginBottom:10};
 const btnStyle = (bg='#C8604A',color='#fff') => ({background:bg,color,border:`1.5px solid ${bg==='#FAF6F0'||bg==='#fff'?'#E8DFCF':bg}`,borderRadius:10,padding:'8px 16px',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:13});
 const inp = {border:'1.5px solid #E8DFCF',borderRadius:10,padding:'9px 12px',fontFamily:'inherit',fontSize:14,outline:'none',width:'100%',background:'#FAF6F0',color:'#3D2E1E'};
@@ -82,7 +81,6 @@ export default function App() {
   const [comps, setComps] = useState(() => genDemo(INIT_MEMBERS, INIT_TASKS));
   const [wkOff, setWkOff] = useState(0);
   const [statMode, setStatMode] = useState('person');
-
   const [checkModal, setCheckModal] = useState(null);
   const [selMember, setSelMember] = useState(null);
   const [timeVal, setTimeVal] = useState('');
@@ -150,7 +148,8 @@ export default function App() {
     } else {
       setTasks(p=>[...p,{id:uid(),name:nt.name,cat:nt.cat||'Général',freq:nt.freq,days:(nt.freq==='weekly'||nt.freq==='biweekly')?nt.days:[0,1,2,3,4,5,6],dom:nt.dom,month:nt.month||0,anchor:todayStr,est:estVal,color:PALETTE[p.length%PALETTE.length]}]);
     }
-    setNt({name:'',cat:'',freq:'daily',days:[],dom:1,month:0,est:''}); setShowAddTask(false);
+    setNt({name:'',cat:'',freq:'daily',days:[],dom:1,month:0,est:''});
+    setShowAddTask(false);
   };
 
   const doAddMember = () => {
@@ -176,19 +175,15 @@ export default function App() {
         .task-card:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(61,46,30,0.13)!important;}
         .chk{transition:transform 0.1s;} .chk:hover{transform:scale(1.12);}
         .tab-btn{transition:color 0.2s;}
-        input[type=number]::-webkit-inner-spin-button{opacity:1;}
       `}</style>
 
-      {/* HEADER */}
       <div style={{background:'linear-gradient(135deg,#C8604A 0%,#D4956A 100%)',padding:'22px 20px 18px',color:'#fff'}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
           <div>
             <div style={{fontSize:11,fontWeight:700,opacity:0.8,letterSpacing:2,textTransform:'uppercase',marginBottom:2}}>
               {today.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}
             </div>
-            <div style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:700,lineHeight:1.2}}>
-              Maison &amp; Famille
-            </div>
+            <div style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:700,lineHeight:1.2}}>Maison &amp; Famille</div>
           </div>
           <div style={{textAlign:'right'}}>
             <div style={{fontSize:30,fontWeight:900,lineHeight:1}}>{progress}%</div>
@@ -200,21 +195,16 @@ export default function App() {
         </div>
         <div style={{display:'flex',gap:6,marginTop:12}}>
           {members.map(m=>(
-            <div key={m.id} title={m.name} style={{width:34,height:34,borderRadius:'50%',background:'rgba(255,255,255,0.22)',border:'2px solid rgba(255,255,255,0.5)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:17}}>
-              {m.emoji}
-            </div>
+            <div key={m.id} style={{width:34,height:34,borderRadius:'50%',background:'rgba(255,255,255,0.22)',border:'2px solid rgba(255,255,255,0.5)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:17}}>{m.emoji}</div>
           ))}
         </div>
       </div>
 
       <div style={{padding:'16px 14px 0'}}>
 
-        {/* ===== TODAY ===== */}
         {tab==='today' && (
           <div>
-            <div style={{fontSize:12,fontWeight:800,color:'#9C8878',textTransform:'uppercase',letterSpacing:1.5,marginBottom:12}}>
-              {doneCount}/{todayTasks.length} complétées
-            </div>
+            <div style={{fontSize:12,fontWeight:800,color:'#9C8878',textTransform:'uppercase',letterSpacing:1.5,marginBottom:12}}>{doneCount}/{todayTasks.length} complétées</div>
             {todayTasks.length===0&&<div style={{...card,textAlign:'center',color:'#9C8878',fontSize:15,padding:30}}>Aucune tâche aujourd'hui 🎉</div>}
             {todayTasks.map(task=>{
               const comp=getComp(task.id,todayStr), done=!!comp, who=comp?getMember(comp.memberId):null;
@@ -244,17 +234,13 @@ export default function App() {
           </div>
         )}
 
-        {/* ===== CALENDAR ===== */}
         {tab==='calendar' && (
           <div>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
               <button onClick={()=>setWkOff(w=>w-1)} style={{...btnStyle('#fff','#3D2E1E'),padding:'6px 10px'}}><ChevronLeft size={16}/></button>
-              <div style={{fontWeight:800,fontSize:14}}>
-                {weekDates[0].getDate()} {MO[weekDates[0].getMonth()]} – {weekDates[6].getDate()} {MO[weekDates[6].getMonth()]} {weekDates[6].getFullYear()}
-              </div>
+              <div style={{fontWeight:800,fontSize:14}}>{weekDates[0].getDate()} {MO[weekDates[0].getMonth()]} – {weekDates[6].getDate()} {MO[weekDates[6].getMonth()]} {weekDates[6].getFullYear()}</div>
               <button onClick={()=>setWkOff(w=>w+1)} style={{...btnStyle('#fff','#3D2E1E'),padding:'6px 10px'}}><ChevronRight size={16}/></button>
             </div>
-            {/* Mini calendar grid */}
             <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3,marginBottom:6}}>
               {DS.map((d,i)=><div key={i} style={{textAlign:'center',fontSize:10,fontWeight:800,color:'#9C8878',textTransform:'uppercase'}}>{d}</div>)}
             </div>
@@ -269,8 +255,8 @@ export default function App() {
                     {dayTasks.slice(0,4).map(t=>{
                       const c=dayComps.find(c=>c.taskId===t.id), who=c?getMember(c.memberId):null;
                       return (
-                        <div key={t.id} onClick={()=>isToday&&openCheck(t.id,ds)} style={{background:c?'#EDF7F1':'#F5F0FA',borderRadius:3,padding:'1px 3px',fontSize:8,fontWeight:700,color:c?'#7BA68A':'#9C8878',cursor:isToday?'pointer':'default',display:'flex',alignItems:'center',gap:1,marginBottom:1,overflow:'hidden'}}>
-                          {c&&<span style={{fontSize:8}}>{who?.emoji}</span>}
+                        <div key={t.id} style={{background:c?'#EDF7F1':'#F5F0FA',borderRadius:3,padding:'1px 3px',fontSize:8,fontWeight:700,color:c?'#7BA68A':'#9C8878',marginBottom:1,overflow:'hidden',display:'flex',alignItems:'center',gap:1}}>
+                          {c&&<span>{who?.emoji}</span>}
                           <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.name}</span>
                         </div>
                       );
@@ -280,7 +266,6 @@ export default function App() {
                 );
               })}
             </div>
-            {/* Detail list */}
             {DF.map((dayName,i)=>{
               const date=weekDates[i], ds=fmt(date);
               const dayTasks=tasks.filter(t=>isDue(t,date));
@@ -289,7 +274,7 @@ export default function App() {
               return (
                 <div key={i} style={{marginBottom:8}}>
                   <div style={{fontSize:12,fontWeight:800,color:isToday?'#C8604A':'#9C8878',textTransform:'uppercase',letterSpacing:1,marginBottom:5,display:'flex',alignItems:'center',gap:6}}>
-                    {isToday&&<span style={{background:'#C8604A',color:'#fff',fontSize:9,padding:'1px 6px',borderRadius:99,fontWeight:700}}>AUJOURD'HUI</span>}
+                    {isToday&&<span style={{background:'#C8604A',color:'#fff',fontSize:9,padding:'1px 6px',borderRadius:99}}>AUJOURD'HUI</span>}
                     {dayName} {date.getDate()}
                   </div>
                   {dayTasks.map(t=>{
@@ -309,10 +294,9 @@ export default function App() {
           </div>
         )}
 
-        {/* ===== TASKS ===== */}
         {tab==='tasks' && (
           <div>
-            <button onClick={()=>setShowAddTask(true)} style={{...btnStyle(),width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,padding:'12px',marginBottom:14,fontSize:14}}>
+            <button onClick={()=>{setEditTask(null);setNt({name:'',cat:'',freq:'daily',days:[],dom:1,month:0,est:''});setShowAddTask(true);}} style={{...btnStyle(),width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,padding:'12px',marginBottom:14,fontSize:14}}>
               <Plus size={17}/>Ajouter une tâche
             </button>
             {tasks.map(t=>(
@@ -321,35 +305,29 @@ export default function App() {
                   <div style={{fontWeight:700,fontSize:14}}>{t.name}</div>
                   <div style={{display:'flex',gap:6,marginTop:4,flexWrap:'wrap',alignItems:'center'}}>
                     <span style={{background:'#F5F0FA',color:'#9B7BB8',fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99}}>{FREQ[t.freq]}</span>
-                    {t.freq==='weekly'&&<span style={{fontSize:11,color:'#9C8878'}}>{t.days.map(d=>DS[d]).join(', ')}</span>}
+                    {(t.freq==='weekly'||t.freq==='biweekly')&&<span style={{fontSize:11,color:'#9C8878'}}>{t.days.map(d=>DS[d]).join(', ')}</span>}
+                    {['monthly','quarterly','biannual'].includes(t.freq)&&<span style={{fontSize:11,color:'#9C8878'}}>le {t.dom}</span>}
+                    {t.freq==='yearly'&&<span style={{fontSize:11,color:'#9C8878'}}>{t.dom} {MO[t.month||0]}</span>}
                     <span style={{fontSize:11,color:'#9C8878',display:'flex',alignItems:'center',gap:2}}><Clock size={10}/>~{t.est}min</span>
                     <span style={{background:CAT_BG[t.cat]||'#F5F0FA',color:CAT_TX[t.cat]||'#9B7BB8',fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99}}>{t.cat}</span>
                   </div>
                 </div>
                 <div style={{display:'flex',gap:4}}>
-                  <button onClick={()=>{setEditTask(t);setNt({name:t.name,cat:t.cat,freq:t.freq,days:t.days||[],dom:t.dom||1,month:t.month||0,est:t.est||15});setShowAddTask(true);}} style={{background:'none',border:'none',cursor:'pointer',color:'#9B7BB8',padding:4}} title="Modifier">
-                    ✏️
-                  </button>
-                  <button onClick={()=>setTasks(p=>p.filter(x=>x.id!==t.id))} style={{background:'none',border:'none',cursor:'pointer',color:'#D4C4B0',padding:4}}>
-                    <Trash2 size={15}/>
-                  </button>
+                  <button onClick={()=>{setEditTask(t);setNt({name:t.name,cat:t.cat,freq:t.freq,days:t.days||[],dom:t.dom||1,month:t.month||0,est:t.est||15});setShowAddTask(true);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:4}}>✏️</button>
+                  <button onClick={()=>setTasks(p=>p.filter(x=>x.id!==t.id))} style={{background:'none',border:'none',cursor:'pointer',color:'#D4C4B0',padding:4}}><Trash2 size={15}/></button>
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        {/* ===== STATS ===== */}
         {tab==='stats' && (
           <div>
             <div style={{display:'flex',gap:6,marginBottom:14}}>
               {[['person','Personnes'],['task','Tâches'],['week','Semaines']].map(([m,l])=>(
-                <button key={m} onClick={()=>setStatMode(m)} style={{...btnStyle(statMode===m?'#C8604A':'#fff',statMode===m?'#fff':'#9C8878'),flex:1,fontSize:12,padding:'8px 4px',boxShadow:'0 1px 4px rgba(61,46,30,0.08)'}}>
-                  {l}
-                </button>
+                <button key={m} onClick={()=>setStatMode(m)} style={{...btnStyle(statMode===m?'#C8604A':'#fff',statMode===m?'#fff':'#9C8878'),flex:1,fontSize:12,padding:'8px 4px',boxShadow:'0 1px 4px rgba(61,46,30,0.08)'}}>{l}</button>
               ))}
             </div>
-
             {statMode==='person'&&(
               <div>
                 <div style={card}>
@@ -359,51 +337,32 @@ export default function App() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#F0E8DC"/>
                       <XAxis dataKey="name" tick={{fontSize:12,fontFamily:'Nunito'}}/>
                       <YAxis tick={{fontSize:10}} unit="m"/>
-                      <Tooltip formatter={v=>[`${v} min`,'Temps']} contentStyle={{fontFamily:'Nunito',borderRadius:10,border:'none',boxShadow:'0 4px 20px rgba(61,46,30,0.1)'}}/>
-                      <Bar dataKey="minutes" radius={[6,6,0,0]}>
-                        {stats.byPerson.map((p,i)=><Cell key={i} fill={p.color}/>)}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div style={card}>
-                  <div style={{fontWeight:800,marginBottom:10,fontSize:14}}>📋 Nombre de tâches effectuées</div>
-                  <ResponsiveContainer width="100%" height={150}>
-                    <BarChart data={stats.byPerson} margin={{top:0,right:0,bottom:0,left:-25}}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#F0E8DC"/>
-                      <XAxis dataKey="name" tick={{fontSize:12,fontFamily:'Nunito'}}/>
-                      <YAxis tick={{fontSize:10}}/>
-                      <Tooltip contentStyle={{fontFamily:'Nunito',borderRadius:10,border:'none',boxShadow:'0 4px 20px rgba(61,46,30,0.1)'}}/>
-                      <Bar dataKey="count" radius={[6,6,0,0]}>
-                        {stats.byPerson.map((p,i)=><Cell key={i} fill={p.color}/>)}
-                      </Bar>
+                      <Tooltip formatter={v=>[`${v} min`,'Temps']} contentStyle={{fontFamily:'Nunito',borderRadius:10,border:'none'}}/>
+                      <Bar dataKey="minutes" radius={[6,6,0,0]}>{stats.byPerson.map((p,i)=><Cell key={i} fill={p.color}/>)}</Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
                 <div style={card}>
                   <div style={{fontWeight:800,marginBottom:14,fontSize:14}}>🏆 Classement</div>
                   {[...stats.byPerson].sort((a,b)=>b.minutes-a.minutes).map((p,i)=>{
-                    const max = Math.max(...stats.byPerson.map(x=>x.minutes))||1;
-                    const medal = ['🥇','🥈','🥉'][i]||`${i+1}.`;
+                    const max=Math.max(...stats.byPerson.map(x=>x.minutes))||1;
+                    const medal=['🥇','🥈','🥉'][i]||`${i+1}.`;
                     return (
                       <div key={p.name} style={{display:'flex',alignItems:'center',gap:10,marginBottom:12}}>
-                        <div style={{width:28,textAlign:'center',fontSize:18,flexShrink:0}}>{medal}</div>
+                        <div style={{width:28,textAlign:'center',fontSize:18}}>{medal}</div>
                         <div style={{flex:1}}>
                           <div style={{fontWeight:700,fontSize:13}}>{p.name}</div>
                           <div style={{background:'#F0E8DC',borderRadius:99,height:7,marginTop:4,overflow:'hidden'}}>
-                            <div style={{width:`${p.minutes/max*100}%`,background:p.color,height:'100%',borderRadius:99,transition:'width 0.5s'}}/>
+                            <div style={{width:`${p.minutes/max*100}%`,background:p.color,height:'100%',borderRadius:99}}/>
                           </div>
                         </div>
-                        <div style={{fontWeight:900,color:p.color,fontSize:14,minWidth:40,textAlign:'right'}}>
-                          {Math.floor(p.minutes/60)}h{p.minutes%60?`${p.minutes%60}m`:''}
-                        </div>
+                        <div style={{fontWeight:900,color:p.color,fontSize:14}}>{Math.floor(p.minutes/60)}h{p.minutes%60?`${p.minutes%60}m`:''}</div>
                       </div>
                     );
                   })}
                 </div>
               </div>
             )}
-
             {statMode==='task'&&(
               <div style={card}>
                 <div style={{fontWeight:800,marginBottom:12,fontSize:14}}>🧹 Temps par tâche</div>
@@ -412,28 +371,23 @@ export default function App() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#F0E8DC"/>
                     <XAxis type="number" tick={{fontSize:10}} unit="m"/>
                     <YAxis type="category" dataKey="name" tick={{fontSize:11,fontFamily:'Nunito'}} width={70}/>
-                    <Tooltip formatter={v=>[`${v} min`,'Temps']} contentStyle={{fontFamily:'Nunito',borderRadius:10,border:'none',boxShadow:'0 4px 20px rgba(61,46,30,0.1)'}}/>
-                    <Bar dataKey="minutes" radius={[0,6,6,0]}>
-                      {stats.byTask.map((t,i)=><Cell key={i} fill={t.color||PALETTE[i%PALETTE.length]}/>)}
-                    </Bar>
+                    <Tooltip formatter={v=>[`${v} min`,'Temps']} contentStyle={{fontFamily:'Nunito',borderRadius:10,border:'none'}}/>
+                    <Bar dataKey="minutes" radius={[0,6,6,0]}>{stats.byTask.map((t,i)=><Cell key={i} fill={t.color||PALETTE[i%PALETTE.length]}/>)}</Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             )}
-
             {statMode==='week'&&(
               <div style={card}>
-                <div style={{fontWeight:800,marginBottom:12,fontSize:14}}>📈 Évolution hebdomadaire par personne</div>
+                <div style={{fontWeight:800,marginBottom:12,fontSize:14}}>📈 Évolution hebdomadaire</div>
                 <ResponsiveContainer width="100%" height={260}>
                   <LineChart data={stats.byWeek} margin={{top:0,right:10,bottom:0,left:-20}}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#F0E8DC"/>
                     <XAxis dataKey="label" tick={{fontSize:12,fontFamily:'Nunito'}}/>
                     <YAxis tick={{fontSize:10}} unit="m"/>
-                    <Tooltip formatter={v=>[`${v} min`]} contentStyle={{fontFamily:'Nunito',borderRadius:10,border:'none',boxShadow:'0 4px 20px rgba(61,46,30,0.1)'}}/>
+                    <Tooltip formatter={v=>[`${v} min`]} contentStyle={{fontFamily:'Nunito',borderRadius:10,border:'none'}}/>
                     <Legend wrapperStyle={{fontFamily:'Nunito',fontSize:12}}/>
-                    {members.map(m=>(
-                      <Line key={m.id} type="monotone" dataKey={m.name} stroke={m.color} strokeWidth={2.5} dot={{r:4,fill:m.color}} activeDot={{r:6}}/>
-                    ))}
+                    {members.map(m=>(<Line key={m.id} type="monotone" dataKey={m.name} stroke={m.color} strokeWidth={2.5} dot={{r:4,fill:m.color}}/>))}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -441,7 +395,6 @@ export default function App() {
           </div>
         )}
 
-        {/* ===== FAMILY ===== */}
         {tab==='family'&&(
           <div>
             <button onClick={()=>setShowAddMember(true)} style={{...btnStyle(),width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,padding:'12px',marginBottom:14,fontSize:14}}>
@@ -453,14 +406,10 @@ export default function App() {
               const thisWeek=mComps.filter(c=>(today-new Date(c.date))/864e5<=7);
               return (
                 <div key={m.id} className="task-card" style={{...card,borderLeft:`4px solid ${m.color}`,display:'flex',alignItems:'center',gap:14}}>
-                  <div style={{width:48,height:48,borderRadius:'50%',background:m.color+'22',display:'flex',alignItems:'center',justifyContent:'center',fontSize:26,flexShrink:0}}>
-                    {m.emoji}
-                  </div>
+                  <div style={{width:48,height:48,borderRadius:'50%',background:m.color+'22',display:'flex',alignItems:'center',justifyContent:'center',fontSize:26}}>{m.emoji}</div>
                   <div style={{flex:1}}>
                     <div style={{fontWeight:800,fontSize:16,color:m.color}}>{m.name}</div>
-                    <div style={{fontSize:12,color:'#9C8878',marginTop:2}}>
-                      {mComps.length} tâches au total · {Math.floor(totalMin/60)}h{totalMin%60?` ${totalMin%60}min`:''} 
-                    </div>
+                    <div style={{fontSize:12,color:'#9C8878',marginTop:2}}>{mComps.length} tâches · {Math.floor(totalMin/60)}h{totalMin%60?` ${totalMin%60}min`:''}</div>
                     <div style={{fontSize:11,color:'#9C8878'}}>Cette semaine : {thisWeek.length} tâches</div>
                   </div>
                   {members.length>1&&<button onClick={()=>setMembers(p=>p.filter(x=>x.id!==m.id))} style={{background:'none',border:'none',cursor:'pointer',color:'#D4C4B0',padding:4}}><Trash2 size={15}/></button>}
@@ -471,7 +420,6 @@ export default function App() {
         )}
       </div>
 
-      {/* BOTTOM NAV */}
       <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:480,background:'#fff',borderTop:'1px solid #F0E8DC',display:'flex',boxShadow:'0 -4px 24px rgba(61,46,30,0.08)',zIndex:100}}>
         {TABS.map(t=>(
           <button key={t.id} className="tab-btn" onClick={()=>setTab(t.id)} style={{flex:1,border:'none',background:'none',cursor:'pointer',padding:'10px 4px 14px',display:'flex',flexDirection:'column',alignItems:'center',gap:3,color:tab===t.id?'#C8604A':'#9C8878',fontFamily:'Nunito',fontWeight:tab===t.id?800:600,fontSize:9.5}}>
@@ -482,18 +430,13 @@ export default function App() {
         ))}
       </div>
 
-      {/* ===== MODAL: CHECK ===== */}
       {checkModal&&(
         <div style={{position:'fixed',inset:0,background:'rgba(61,46,30,0.5)',display:'flex',alignItems:'flex-end',zIndex:200}} onClick={e=>e.target===e.currentTarget&&setCheckModal(null)}>
           <div style={{background:'#fff',borderRadius:'22px 22px 0 0',padding:'26px 20px 36px',width:'100%',maxWidth:480,margin:'0 auto'}}>
             <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:20,marginBottom:4}}>{getTask(checkModal.taskId)?.name}</div>
             <div style={{color:'#9C8878',fontSize:13,marginBottom:18}}>Qui a réalisé cette tâche ?</div>
             <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:20}}>
-              {members.map(m=>(
-                <button key={m.id} onClick={()=>setSelMember(m.id)} style={{...btnStyle(selMember===m.id?m.color:'#FAF6F0',selMember===m.id?'#fff':m.color),padding:'9px 16px',display:'flex',alignItems:'center',gap:6,border:`2px solid ${m.color}`,fontWeight:700}}>
-                  {m.emoji} {m.name}
-                </button>
-              ))}
+              {members.map(m=>(<button key={m.id} onClick={()=>setSelMember(m.id)} style={{...btnStyle(selMember===m.id?m.color:'#FAF6F0',selMember===m.id?'#fff':m.color),padding:'9px 16px',display:'flex',alignItems:'center',gap:6,border:`2px solid ${m.color}`}}>{m.emoji} {m.name}</button>))}
             </div>
             <div style={{marginBottom:22}}>
               <label style={{fontSize:12,fontWeight:800,color:'#9C8878',display:'block',marginBottom:6}}>TEMPS PASSÉ</label>
@@ -502,14 +445,11 @@ export default function App() {
                 <span style={{color:'#9C8878',fontSize:14,fontWeight:600}}>minutes</span>
               </div>
             </div>
-            <button onClick={confirmCheck} disabled={!selMember} style={{...btnStyle(),width:'100%',padding:'14px',fontSize:15,opacity:selMember?1:0.45,transition:'opacity 0.2s'}}>
-              ✓ Confirmer
-            </button>
+            <button onClick={confirmCheck} disabled={!selMember} style={{...btnStyle(),width:'100%',padding:'14px',fontSize:15,opacity:selMember?1:0.45}}>✓ Confirmer</button>
           </div>
         </div>
       )}
 
-      {/* ===== MODAL: ADD TASK ===== */}
       {showAddTask&&(
         <div style={{position:'fixed',inset:0,background:'rgba(61,46,30,0.5)',display:'flex',alignItems:'flex-end',zIndex:200}} onClick={e=>e.target===e.currentTarget&&setShowAddTask(false)}>
           <div style={{background:'#fff',borderRadius:'22px 22px 0 0',padding:'24px 20px 36px',width:'100%',maxWidth:480,margin:'0 auto',maxHeight:'88vh',overflowY:'auto'}}>
@@ -529,32 +469,20 @@ export default function App() {
               <div>
                 <label style={{fontSize:11,fontWeight:800,color:'#9C8878',display:'block',marginBottom:5,letterSpacing:1}}>FRÉQUENCE</label>
                 <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6}}>
-                  {Object.entries(FREQ).map(([f,label])=>(
-                    <button key={f} onClick={()=>setNt(p=>({...p,freq:f}))} style={{...btnStyle(nt.freq===f?'#C8604A':'#FAF6F0',nt.freq===f?'#fff':'#9C8878'),fontSize:12,padding:'9px 4px',textAlign:'center'}}>
-                      {label}
-                    </button>
-                  ))}
+                  {Object.entries(FREQ).map(([f,label])=>(<button key={f} onClick={()=>setNt(p=>({...p,freq:f}))} style={{...btnStyle(nt.freq===f?'#C8604A':'#FAF6F0',nt.freq===f?'#fff':'#9C8878'),fontSize:12,padding:'9px 4px',textAlign:'center'}}>{label}</button>))}
                 </div>
               </div>
               {(nt.freq==='weekly'||nt.freq==='biweekly')&&(
                 <div>
-                  <label style={{fontSize:11,fontWeight:800,color:'#9C8878',display:'block',marginBottom:5,letterSpacing:1}}>
-                    {nt.freq==='biweekly'?'JOUR (toutes les 2 semaines)':'JOURS'}
-                  </label>
+                  <label style={{fontSize:11,fontWeight:800,color:'#9C8878',display:'block',marginBottom:5,letterSpacing:1}}>{nt.freq==='biweekly'?'JOUR (toutes les 2 semaines)':'JOURS'}</label>
                   <div style={{display:'flex',gap:4}}>
-                    {DS.map((d,i)=>(
-                      <button key={i} onClick={()=>setNt(p=>({...p,days:nt.freq==='biweekly'?[i]:p.days.includes(i)?p.days.filter(x=>x!==i):[...p.days,i]}))} style={{...btnStyle(nt.days.includes(i)?'#C8604A':'#FAF6F0',nt.days.includes(i)?'#fff':'#9C8878'),flex:1,padding:'7px 2px',fontSize:11}}>
-                        {d}
-                      </button>
-                    ))}
+                    {DS.map((d,i)=>(<button key={i} onClick={()=>setNt(p=>({...p,days:nt.freq==='biweekly'?[i]:p.days.includes(i)?p.days.filter(x=>x!==i):[...p.days,i]}))} style={{...btnStyle(nt.days.includes(i)?'#C8604A':'#FAF6F0',nt.days.includes(i)?'#fff':'#9C8878'),flex:1,padding:'7px 2px',fontSize:11}}>{d}</button>))}
                   </div>
                 </div>
               )}
               {['monthly','quarterly','biannual','yearly'].includes(nt.freq)&&(
                 <div>
-                  <label style={{fontSize:11,fontWeight:800,color:'#9C8878',display:'block',marginBottom:5,letterSpacing:1}}>
-                    {nt.freq==='quarterly'?'JOUR (jan, avr, jul, oct)':nt.freq==='biannual'?'JOUR (jan & jul)':nt.freq==='yearly'?'JOUR':'JOUR DU MOIS'}
-                  </label>
+                  <label style={{fontSize:11,fontWeight:800,color:'#9C8878',display:'block',marginBottom:5,letterSpacing:1}}>{nt.freq==='quarterly'?'JOUR (jan, avr, jul, oct)':nt.freq==='biannual'?'JOUR (jan & jul)':nt.freq==='yearly'?'JOUR':'JOUR DU MOIS'}</label>
                   <input type="number" style={{...inp,width:90}} value={nt.dom} onChange={e=>setNt(p=>({...p,dom:parseInt(e.target.value)||1}))} min={1} max={31}/>
                 </div>
               )}
@@ -562,11 +490,7 @@ export default function App() {
                 <div>
                   <label style={{fontSize:11,fontWeight:800,color:'#9C8878',display:'block',marginBottom:5,letterSpacing:1}}>MOIS</label>
                   <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:4}}>
-                    {MO.map((m,i)=>(
-                      <button key={i} onClick={()=>setNt(p=>({...p,month:i}))} style={{...btnStyle(nt.month===i?'#C8604A':'#FAF6F0',nt.month===i?'#fff':'#9C8878'),fontSize:12,padding:'7px 2px',textTransform:'capitalize'}}>
-                        {m}
-                      </button>
-                    ))}
+                    {MO.map((m,i)=>(<button key={i} onClick={()=>setNt(p=>({...p,month:i}))} style={{...btnStyle(nt.month===i?'#C8604A':'#FAF6F0',nt.month===i?'#fff':'#9C8878'),fontSize:12,padding:'7px 2px'}}>{m}</button>))}
                   </div>
                 </div>
               )}
@@ -574,15 +498,12 @@ export default function App() {
                 <label style={{fontSize:11,fontWeight:800,color:'#9C8878',display:'block',marginBottom:5,letterSpacing:1}}>DURÉE ESTIMÉE (minutes)</label>
                 <input type="number" style={{...inp,width:100}} value={nt.est} onChange={e=>setNt(p=>({...p,est:e.target.value}))} onBlur={e=>setNt(p=>({...p,est:parseInt(e.target.value)||15}))} placeholder="ex: 20" min={1}/>
               </div>
-              <button onClick={doAddTask} style={{...btnStyle(),width:'100%',padding:'14px',fontSize:15,marginTop:6}}>
-                {editTask ? '✏️ Modifier la tâche' : '+ Créer la tâche'}
-              </button>
+              <button onClick={doAddTask} style={{...btnStyle(),width:'100%',padding:'14px',fontSize:15,marginTop:6}}>{editTask?'✏️ Modifier la tâche':'+ Créer la tâche'}</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ===== MODAL: ADD MEMBER ===== */}
       {showAddMember&&(
         <div style={{position:'fixed',inset:0,background:'rgba(61,46,30,0.5)',display:'flex',alignItems:'flex-end',zIndex:200}} onClick={e=>e.target===e.currentTarget&&setShowAddMember(false)}>
           <div style={{background:'#fff',borderRadius:'22px 22px 0 0',padding:'24px 20px 36px',width:'100%',maxWidth:480,margin:'0 auto'}}>
@@ -598,16 +519,10 @@ export default function App() {
               <div>
                 <label style={{fontSize:11,fontWeight:800,color:'#9C8878',display:'block',marginBottom:5,letterSpacing:1}}>EMOJI</label>
                 <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                  {['👩','👨','👧','🧒','👶','🧑','👵','👴','🐶'].map(e=>(
-                    <button key={e} onClick={()=>setNm(p=>({...p,emoji:e}))} style={{fontSize:22,background:nm.emoji===e?'#FFF0EB':'#FAF6F0',border:`2px solid ${nm.emoji===e?'#C8604A':'transparent'}`,borderRadius:8,padding:5,cursor:'pointer'}}>
-                      {e}
-                    </button>
-                  ))}
+                  {['👩','👨','👧','🧒','👶','🧑','👵','👴','🐶'].map(e=>(<button key={e} onClick={()=>setNm(p=>({...p,emoji:e}))} style={{fontSize:22,background:nm.emoji===e?'#FFF0EB':'#FAF6F0',border:`2px solid ${nm.emoji===e?'#C8604A':'transparent'}`,borderRadius:8,padding:5,cursor:'pointer'}}>{e}</button>))}
                 </div>
               </div>
-              <button onClick={doAddMember} style={{...btnStyle(),width:'100%',padding:'14px',fontSize:15,marginTop:6}}>
-                + Ajouter
-              </button>
+              <button onClick={doAddMember} style={{...btnStyle(),width:'100%',padding:'14px',fontSize:15,marginTop:6}}>+ Ajouter</button>
             </div>
           </div>
         </div>
