@@ -88,8 +88,9 @@ export default function App() {
   const [timeVal, setTimeVal] = useState('');
   const [showAddTask, setShowAddTask] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
-  const [nt, setNt] = useState({name:'',cat:'',freq:'daily',days:[],dom:1,month:0,est:15});
+  const [nt, setNt] = useState({name:'',cat:'',freq:'daily',days:[],dom:1,month:0,est:''});
   const [nm, setNm] = useState({name:'',emoji:'👤'});
+  const [editTask, setEditTask] = useState(null);
 
   const getMember = id => members.find(m=>m.id===id);
   const getTask = id => tasks.find(t=>t.id===id);
@@ -142,8 +143,14 @@ export default function App() {
 
   const doAddTask = () => {
     if (!nt.name.trim()) return;
-    setTasks(p=>[...p,{id:uid(),name:nt.name,cat:nt.cat||'Général',freq:nt.freq,days:(nt.freq==='weekly'||nt.freq==='biweekly')?nt.days:[0,1,2,3,4,5,6],dom:nt.dom,month:nt.month||0,anchor:todayStr,est:nt.est||15,color:PALETTE[p.length%PALETTE.length]}]);
-    setNt({name:'',cat:'',freq:'daily',days:[],dom:1,est:15}); setShowAddTask(false);
+    const estVal = parseInt(nt.est)||15;
+    if (editTask) {
+      setTasks(p=>p.map(t=>t.id===editTask.id?{...t,name:nt.name,cat:nt.cat||'Général',freq:nt.freq,days:(nt.freq==='weekly'||nt.freq==='biweekly')?nt.days:[0,1,2,3,4,5,6],dom:nt.dom,month:nt.month||0,est:estVal}:t));
+      setEditTask(null);
+    } else {
+      setTasks(p=>[...p,{id:uid(),name:nt.name,cat:nt.cat||'Général',freq:nt.freq,days:(nt.freq==='weekly'||nt.freq==='biweekly')?nt.days:[0,1,2,3,4,5,6],dom:nt.dom,month:nt.month||0,anchor:todayStr,est:estVal,color:PALETTE[p.length%PALETTE.length]}]);
+    }
+    setNt({name:'',cat:'',freq:'daily',days:[],dom:1,month:0,est:''}); setShowAddTask(false);
   };
 
   const doAddMember = () => {
@@ -319,9 +326,14 @@ export default function App() {
                     <span style={{background:CAT_BG[t.cat]||'#F5F0FA',color:CAT_TX[t.cat]||'#9B7BB8',fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99}}>{t.cat}</span>
                   </div>
                 </div>
-                <button onClick={()=>setTasks(p=>p.filter(x=>x.id!==t.id))} style={{background:'none',border:'none',cursor:'pointer',color:'#D4C4B0',padding:4}}>
-                  <Trash2 size={15}/>
-                </button>
+                <div style={{display:'flex',gap:4}}>
+                  <button onClick={()=>{setEditTask(t);setNt({name:t.name,cat:t.cat,freq:t.freq,days:t.days||[],dom:t.dom||1,month:t.month||0,est:t.est||15});setShowAddTask(true);}} style={{background:'none',border:'none',cursor:'pointer',color:'#9B7BB8',padding:4}} title="Modifier">
+                    ✏️
+                  </button>
+                  <button onClick={()=>setTasks(p=>p.filter(x=>x.id!==t.id))} style={{background:'none',border:'none',cursor:'pointer',color:'#D4C4B0',padding:4}}>
+                    <Trash2 size={15}/>
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -502,8 +514,8 @@ export default function App() {
         <div style={{position:'fixed',inset:0,background:'rgba(61,46,30,0.5)',display:'flex',alignItems:'flex-end',zIndex:200}} onClick={e=>e.target===e.currentTarget&&setShowAddTask(false)}>
           <div style={{background:'#fff',borderRadius:'22px 22px 0 0',padding:'24px 20px 36px',width:'100%',maxWidth:480,margin:'0 auto',maxHeight:'88vh',overflowY:'auto'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:22}}>
-              <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:20}}>Nouvelle tâche</div>
-              <button onClick={()=>setShowAddTask(false)} style={{background:'none',border:'none',cursor:'pointer',color:'#9C8878'}}><X size={20}/></button>
+              <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:20}}>{editTask?'Modifier la tâche':'Nouvelle tâche'}</div>
+              <button onClick={()=>{setShowAddTask(false);setEditTask(null);setNt({name:'',cat:'',freq:'daily',days:[],dom:1,month:0,est:''});}} style={{background:'none',border:'none',cursor:'pointer',color:'#9C8878'}}><X size={20}/></button>
             </div>
             <div style={{display:'flex',flexDirection:'column',gap:14}}>
               <div>
@@ -560,10 +572,10 @@ export default function App() {
               )}
               <div>
                 <label style={{fontSize:11,fontWeight:800,color:'#9C8878',display:'block',marginBottom:5,letterSpacing:1}}>DURÉE ESTIMÉE (minutes)</label>
-                <input type="number" style={{...inp,width:100}} value={nt.est} onChange={e=>setNt(p=>({...p,est:parseInt(e.target.value)||10}))} min={1}/>
+                <input type="number" style={{...inp,width:100}} value={nt.est} onChange={e=>setNt(p=>({...p,est:e.target.value}))} onBlur={e=>setNt(p=>({...p,est:parseInt(e.target.value)||15}))} placeholder="ex: 20" min={1}/>
               </div>
               <button onClick={doAddTask} style={{...btnStyle(),width:'100%',padding:'14px',fontSize:15,marginTop:6}}>
-                + Créer la tâche
+                {editTask ? '✏️ Modifier la tâche' : '+ Créer la tâche'}
               </button>
             </div>
           </div>
