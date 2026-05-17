@@ -83,6 +83,14 @@ export default function App() {
   const getTask = id => tasks.find(t=>t.id===id);
   const getComp = (taskId, date) => comps.find(c=>c.taskId===taskId&&c.date===date);
 
+  const isSkipped = (taskId, date) => comps.some(c=>c.taskId===taskId&&c.date===date&&c.skipped);
+
+  const skipTask = async (taskId, date) => {
+    const ex = comps.find(c=>c.taskId===taskId&&c.date===date&&c.skipped);
+    if (ex) { await deleteDoc(doc(db,'completions',ex.id)); return; }
+    await addDoc(collection(db,'completions'),{taskId,memberId:'',date,min:0,skipped:true});
+  };
+
   const todayTasks = tasks.filter(t=>isDue(t,today) && !isSkipped(t.id,todayStr));
   const todayComps = comps.filter(c=>c.date===todayStr);
   const doneToday = id => todayComps.some(c=>c.taskId===id&&!c.skipped);
@@ -124,14 +132,6 @@ export default function App() {
     const t = tasks.find(t=>t.id===taskId);
     setTimeVal(t?.est ? String(t.est) : '');
   };
-
-  const skipTask = async (taskId, date) => {
-    const ex = comps.find(c=>c.taskId===taskId&&c.date===date&&c.skipped);
-    if (ex) { await deleteDoc(doc(db,'completions',ex.id)); return; }
-    await addDoc(collection(db,'completions'),{taskId,memberId:'',date,min:0,skipped:true});
-  };
-
-  const isSkipped = (taskId, date) => comps.some(c=>c.taskId===taskId&&c.date===date&&c.skipped);
 
   const confirmCheck = async () => {
     if (!selMember||!checkModal) return;
