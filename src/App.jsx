@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
-import { CheckCircle, Circle, Clock, ChevronLeft, ChevronRight, Plus, X, Trash2, TrendingUp, CalendarDays, ListTodo, Users, Home } from "lucide-react";
+import { CheckCircle, Circle, Clock, ChevronLeft, ChevronRight, Plus, X, Trash2, TrendingUp, CalendarDays, ListTodo, Users, Home, FileText } from "lucide-react";
 import { db } from "./firebase";
 import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
 
@@ -11,6 +11,7 @@ const todayStr = fmt(today);
 const dow = d => (d.getDay()+6)%7;
 
 const FREQ = { daily:'Quotidien', weekly:'Hebdomadaire', biweekly:'Bimensuel', monthly:'Mensuel', quarterly:'Trimestriel', biannual:'Semestriel', yearly:'Annuel' };
+const FREQ_ORDER = ['daily','weekly','biweekly','monthly','quarterly','biannual','yearly'];
 const DS = ['Lu','Ma','Me','Je','Ve','Sa','Di'];
 const DF = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
 const MO = ['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
@@ -37,8 +38,8 @@ function weekOf(ref, off=0) {
   return Array.from({length:7},(_,i)=>{ const dd=new Date(d); dd.setDate(dd.getDate()+i); return dd; });
 }
 
-const CAT_BG = {Cuisine:'#FFF0EB',Ménage:'#EDFAF3',Approvisionnement:'#EBF3FA',Général:'#F5F0FA',Jardin:'#F0FAF0',Courses:'#FFF5EB',Enfants:'#FFF0F5',Animaux:'#F5F0FF'};
-const CAT_TX = {Cuisine:'#C8604A',Ménage:'#7BA68A',Approvisionnement:'#5B8DB8',Général:'#9B7BB8',Jardin:'#5B8A5B',Courses:'#D4956A',Enfants:'#C87B9B',Animaux:'#7B6BB8'};
+const CAT_BG = {Cuisine:'#FFF0EB',Ménage:'#EDFAF3',Approvisionnement:'#EBF3FA',Général:'#F5F0FA',Jardin:'#F0FAF0',Courses:'#FFF5EB',Enfants:'#FFF0F5',Animaux:'#F5F0FF',Administratif:'#F0F0FF'};
+const CAT_TX = {Cuisine:'#C8604A',Ménage:'#7BA68A',Approvisionnement:'#5B8DB8',Général:'#9B7BB8',Jardin:'#5B8A5B',Courses:'#D4956A',Enfants:'#C87B9B',Animaux:'#7B6BB8',Administratif:'#6B6BB8'};
 const card = {background:'#fff',borderRadius:16,padding:'14px 18px',boxShadow:'0 2px 12px rgba(61,46,30,0.07)',marginBottom:10};
 const btnStyle = (bg='#C8604A',color='#fff') => ({background:bg,color,border:`1.5px solid ${bg==='#FAF6F0'||bg==='#fff'?'#E8DFCF':bg}`,borderRadius:10,padding:'8px 16px',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:13});
 const inp = {border:'1.5px solid #E8DFCF',borderRadius:10,padding:'9px 12px',fontFamily:'inherit',fontSize:14,outline:'none',width:'100%',background:'#FAF6F0',color:'#3D2E1E'};
@@ -56,11 +57,13 @@ export default function App() {
   const [timeVal, setTimeVal] = useState('');
   const [showAddTask, setShowAddTask] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
-  const [nt, setNt] = useState({name:'',cat:'',freq:'daily',days:[],dom:1,month:0,est:''});
+  const [nt, setNt] = useState({name:'',cat:'',freq:'daily',days:[],dom:1,month:0,est:'',notes:''});
   const [nm, setNm] = useState({name:'',emoji:'👤'});
   const [editTask, setEditTask] = useState(null);
   const [cats, setCats] = useState(['Cuisine','Ménage','Jardin','Courses','Enfants','Animaux','Administratif','Général']);
   const [newCat, setNewCat] = useState('');
+  const [todaySort, setTodaySort] = useState('cat');
+  const [taskSort, setTaskSort] = useState('freq');
 
   useEffect(()=>{
     const u1 = onSnapshot(collection(db,'members'), s=>{
@@ -80,24 +83,61 @@ export default function App() {
   const getTask = id => tasks.find(t=>t.id===id);
   const getComp = (taskId, date) => comps.find(c=>c.taskId===taskId&&c.date===date);
 
-  const todayTasks = tasks.filter(t=>isDue(t,today));
+  const todayTasks = tasks.filter(t=>isDue(t,today) && !isSkipped(t.id,todayStr));
   const todayComps = comps.filter(c=>c.date===todayStr);
-  const doneToday = id => todayComps.some(c=>c.taskId===id);
+  const doneToday = id => todayComps.some(c=>c.taskId===id&&!c.skipped);
   const doneCount = todayTasks.filter(t=>doneToday(t.id)).length;
   const progress = todayTasks.length ? Math.round(doneCount/todayTasks.length*100) : 0;
+
+  const overdueTasks = (() => {
+    const result = [];
+    for (let ago=1; ago<=7; ago++) {
+      const d = new Date(today); d.setDate(d.getDate()-ago);
+      const ds = fmt(d);
+      tasks.forEach(t => {
+        if (!isDue(t,d)) return;
+        const done = comps.some(c=>c.taskId===t.id&&c.date===ds&&!c.skipped);
+        const skipped = comps.some(c=>c.taskId===t.id&&c.date===ds&&c.skipped);
+        if (!done && !skipped) result.push({...t, overdueDate:ds, daysAgo:ago});
+      });
+    }
+    return result;
+  })();
+
+  const sortedTodayTasks = [...todayTasks].sort((a,b)=>{
+    if (todaySort==='cat') return (a.cat||'').localeCompare(b.cat||'');
+    if (todaySort==='freq') return FREQ_ORDER.indexOf(a.freq)-FREQ_ORDER.indexOf(b.freq);
+    return 0;
+  });
+
+  const sortedTasks = [...tasks].sort((a,b)=>{
+    if (taskSort==='freq') return FREQ_ORDER.indexOf(a.freq)-FREQ_ORDER.indexOf(b.freq);
+    if (taskSort==='cat') return (a.cat||'').localeCompare(b.cat||'');
+    return 0;
+  });
 
   const openCheck = async (taskId, date) => {
     const ex = getComp(taskId, date||todayStr);
     if (ex) { await deleteDoc(doc(db,'completions',ex.id)); return; }
     setCheckModal({taskId, date: date||todayStr});
     setSelMember(members[0]?.id);
-    setTimeVal('');
+    const t = tasks.find(t=>t.id===taskId);
+    setTimeVal(t?.est ? String(t.est) : '');
   };
+
+  const skipTask = async (taskId, date) => {
+    const ex = comps.find(c=>c.taskId===taskId&&c.date===date&&c.skipped);
+    if (ex) { await deleteDoc(doc(db,'completions',ex.id)); return; }
+    await addDoc(collection(db,'completions'),{taskId,memberId:'',date,min:0,skipped:true});
+  };
+
+  const isSkipped = (taskId, date) => comps.some(c=>c.taskId===taskId&&c.date===date&&c.skipped);
 
   const confirmCheck = async () => {
     if (!selMember||!checkModal) return;
     const t = getTask(checkModal.taskId);
-    await addDoc(collection(db,'completions'),{taskId:checkModal.taskId,memberId:selMember,date:checkModal.date,min:parseInt(timeVal)||t?.est||15});
+    const mins = parseInt(timeVal)||t?.est||15;
+    await addDoc(collection(db,'completions'),{taskId:checkModal.taskId,memberId:selMember,date:checkModal.date,min:mins});
     setCheckModal(null);
   };
 
@@ -128,14 +168,14 @@ export default function App() {
   const doAddTask = async () => {
     if (!nt.name.trim()) return;
     const estVal = parseInt(nt.est)||15;
-    const data = {name:nt.name,cat:nt.cat||'Général',freq:nt.freq,days:(nt.freq==='weekly'||nt.freq==='biweekly')?nt.days:[0,1,2,3,4,5,6],dom:nt.dom,month:nt.month||0,anchor:todayStr,est:estVal,color:PALETTE[tasks.length%PALETTE.length]};
+    const data = {name:nt.name,cat:nt.cat||'Général',freq:nt.freq,days:(nt.freq==='weekly'||nt.freq==='biweekly')?nt.days:[0,1,2,3,4,5,6],dom:nt.dom,month:nt.month||0,anchor:todayStr,est:estVal,notes:nt.notes||'',color:PALETTE[tasks.length%PALETTE.length]};
     if (editTask) {
       await updateDoc(doc(db,'tasks',editTask.id), data);
       setEditTask(null);
     } else {
       await addDoc(collection(db,'tasks'), data);
     }
-    setNt({name:'',cat:'',freq:'daily',days:[],dom:1,month:0,est:''});
+    setNt({name:'',cat:'',freq:'daily',days:[],dom:1,month:0,est:'',notes:''});
     setShowAddTask(false);
   };
 
@@ -144,6 +184,13 @@ export default function App() {
     await addDoc(collection(db,'members'),{name:nm.name,color:PALETTE[members.length%PALETTE.length],emoji:nm.emoji||'👤'});
     setNm({name:'',emoji:'👤'}); setShowAddMember(false);
   };
+
+  const groupByKey = (arr, key) => arr.reduce((acc,item)=>{
+    const k = item[key]||'Général';
+    if (!acc[k]) acc[k]=[];
+    acc[k].push(item);
+    return acc;
+  },{});
 
   const TABS = [
     {id:'today',label:"Aujourd'hui",icon:<Home size={17}/>},
@@ -194,29 +241,89 @@ export default function App() {
       </div>
 
       <div style={{padding:'16px 14px 0'}}>
+
         {tab==='today' && (
           <div>
-            <div style={{fontSize:12,fontWeight:800,color:'#9C8878',textTransform:'uppercase',letterSpacing:1.5,marginBottom:12}}>{doneCount}/{todayTasks.length} complétées</div>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+              <div style={{fontSize:12,fontWeight:800,color:'#9C8878',textTransform:'uppercase',letterSpacing:1.5}}>{doneCount}/{todayTasks.length} complétées</div>
+              <div style={{display:'flex',gap:4}}>
+                <button onClick={()=>setTodaySort('cat')} style={{...btnStyle(todaySort==='cat'?'#C8604A':'#FAF6F0',todaySort==='cat'?'#fff':'#9C8878'),fontSize:11,padding:'5px 10px'}}>Catégorie</button>
+                <button onClick={()=>setTodaySort('freq')} style={{...btnStyle(todaySort==='freq'?'#C8604A':'#FAF6F0',todaySort==='freq'?'#fff':'#9C8878'),fontSize:11,padding:'5px 10px'}}>Fréquence</button>
+              </div>
+            </div>
             {todayTasks.length===0&&<div style={{...card,textAlign:'center',color:'#9C8878',fontSize:15,padding:30}}>Aucune tâche aujourd'hui 🎉</div>}
-            {todayTasks.map(task=>{
-              const comp=getComp(task.id,todayStr), done=!!comp, who=comp?getMember(comp.memberId):null;
-              return (
-                <div key={task.id} className="task-card" style={{...card,opacity:done?0.82:1,borderLeft:`4px solid ${task.color||'#C8604A'}`,display:'flex',alignItems:'center',gap:12}}>
-                  <button className="chk" onClick={()=>openCheck(task.id)} style={{background:'none',border:'none',cursor:'pointer',padding:0,flexShrink:0}}>
-                    {done?<CheckCircle size={27} color="#7BA68A" fill="#7BA68A"/>:<Circle size={27} color="#D4C4B0"/>}
-                  </button>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontWeight:700,fontSize:15,textDecoration:done?'line-through':'none',color:done?'#9C8878':'#3D2E1E'}}>{task.name}</div>
-                    <div style={{display:'flex',gap:6,marginTop:4,alignItems:'center',flexWrap:'wrap'}}>
-                      <span style={{background:CAT_BG[task.cat]||'#F5F0FA',color:CAT_TX[task.cat]||'#9B7BB8',fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99}}>{task.cat}</span>
-                      <span style={{color:'#9C8878',fontSize:11,display:'flex',alignItems:'center',gap:2}}><Clock size={10}/>{task.est}min</span>
-                      {done&&who&&<span style={{fontSize:12,fontWeight:800,color:who.color}}>{who.emoji} {who.name} · {comp.min}min</span>}
-                    </div>
-                  </div>
+            {todaySort==='cat' ? (
+              Object.entries(groupByKey(sortedTodayTasks,'cat')).map(([cat,catTasks])=>(
+                <div key={cat}>
+                  <div style={{fontSize:11,fontWeight:800,color:CAT_TX[cat]||'#9B7BB8',background:CAT_BG[cat]||'#F5F0FA',padding:'4px 12px',borderRadius:99,display:'inline-block',marginBottom:6,marginTop:4}}>{cat}</div>
+                  {catTasks.map(task=>{
+                    const comp=getComp(task.id,todayStr), done=!!comp, who=comp?getMember(comp.memberId):null;
+                    return (
+                      <div key={task.id} className="task-card" style={{...card,opacity:done?0.82:1,borderLeft:`4px solid ${task.color||'#C8604A'}`,display:'flex',alignItems:'center',gap:12}}>
+                        <button className="chk" onClick={()=>openCheck(task.id)} style={{background:'none',border:'none',cursor:'pointer',padding:0,flexShrink:0}}>
+                          {done?<CheckCircle size={27} color="#7BA68A" fill="#7BA68A"/>:<Circle size={27} color="#D4C4B0"/>}
+                        </button>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontWeight:700,fontSize:15,textDecoration:done?'line-through':'none',color:done?'#9C8878':'#3D2E1E'}}>{task.name}</div>
+                          {task.notes&&<div style={{fontSize:11,color:'#9C8878',marginTop:2,fontStyle:'italic'}}>{task.notes}</div>}
+                          <div style={{display:'flex',gap:6,marginTop:4,alignItems:'center',flexWrap:'wrap'}}>
+                            <span style={{color:'#9C8878',fontSize:11,display:'flex',alignItems:'center',gap:2}}><Clock size={10}/>{task.est}min</span>
+                            {done&&who&&<span style={{fontSize:12,fontWeight:800,color:who.color}}>{who.emoji} {who.name} · {comp.min}min</span>}
+                          </div>
+                        </div>
+                        {!done&&<button onClick={()=>skipTask(task.id,todayStr)} title="Ignorer aujourd'hui" style={{background:'none',border:'none',cursor:'pointer',color:'#D4C4B0',padding:4,fontSize:16}}>🚫</button>}
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
-            {doneCount===todayTasks.length&&todayTasks.length>0&&(
+              ))
+            ) : (
+              sortedTodayTasks.map(task=>{
+                const comp=getComp(task.id,todayStr), done=!!comp, who=comp?getMember(comp.memberId):null;
+                return (
+                  <div key={task.id} className="task-card" style={{...card,opacity:done?0.82:1,borderLeft:`4px solid ${task.color||'#C8604A'}`,display:'flex',alignItems:'center',gap:12}}>
+                    <button className="chk" onClick={()=>openCheck(task.id)} style={{background:'none',border:'none',cursor:'pointer',padding:0,flexShrink:0}}>
+                      {done?<CheckCircle size={27} color="#7BA68A" fill="#7BA68A"/>:<Circle size={27} color="#D4C4B0"/>}
+                    </button>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:700,fontSize:15,textDecoration:done?'line-through':'none',color:done?'#9C8878':'#3D2E1E'}}>{task.name}</div>
+                      {task.notes&&<div style={{fontSize:11,color:'#9C8878',marginTop:2,fontStyle:'italic'}}>{task.notes}</div>}
+                      <div style={{display:'flex',gap:6,marginTop:4,alignItems:'center',flexWrap:'wrap'}}>
+                        <span style={{background:CAT_BG[task.cat]||'#F5F0FA',color:CAT_TX[task.cat]||'#9B7BB8',fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99}}>{task.cat}</span>
+                        <span style={{color:'#9C8878',fontSize:11,display:'flex',alignItems:'center',gap:2}}><Clock size={10}/>{task.est}min</span>
+                        {done&&who&&<span style={{fontSize:12,fontWeight:800,color:who.color}}>{who.emoji} {who.name} · {comp.min}min</span>}
+                      </div>
+                    </div>
+                    {!done&&<button onClick={()=>skipTask(task.id,todayStr)} title="Ignorer aujourd'hui" style={{background:'none',border:'none',cursor:'pointer',color:'#D4C4B0',padding:4,fontSize:16}}>🚫</button>}
+                  </div>
+                );
+              })
+            )}
+            {overdueTasks.length>0&&(
+              <div style={{marginTop:8}}>
+                <div style={{fontSize:12,fontWeight:800,color:'#C8604A',textTransform:'uppercase',letterSpacing:1.5,marginBottom:8,display:'flex',alignItems:'center',gap:6}}>
+                  🔴 En retard ({overdueTasks.length})
+                </div>
+                {overdueTasks.map(task=>(
+                  <div key={task.id+task.overdueDate} className="task-card" style={{...card,borderLeft:'4px solid #C8604A',display:'flex',alignItems:'center',gap:12,opacity:0.9}}>
+                    <button className="chk" onClick={()=>openCheck(task.id,task.overdueDate)} style={{background:'none',border:'none',cursor:'pointer',padding:0,flexShrink:0}}>
+                      <Circle size={27} color="#C8604A"/>
+                    </button>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:700,fontSize:14,color:'#3D2E1E'}}>{task.name}</div>
+                      <div style={{display:'flex',gap:6,marginTop:3,alignItems:'center',flexWrap:'wrap'}}>
+                        <span style={{background:'#FFF0EB',color:'#C8604A',fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99}}>
+                          {task.daysAgo===1?'Hier':`Il y a ${task.daysAgo}j`}
+                        </span>
+                        <span style={{background:CAT_BG[task.cat]||'#F5F0FA',color:CAT_TX[task.cat]||'#9B7BB8',fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99}}>{task.cat}</span>
+                      </div>
+                    </div>
+                    <button onClick={()=>skipTask(task.id,task.overdueDate)} title="Ignorer" style={{background:'none',border:'none',cursor:'pointer',color:'#D4C4B0',padding:4,fontSize:14}}>🚫</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {doneCount===todayTasks.length&&todayTasks.length>0&&overdueTasks.length===0&&(
               <div style={{...card,background:'linear-gradient(135deg,#7BA68A,#5B8A7A)',color:'#fff',textAlign:'center',padding:28,borderLeft:'none'}}>
                 <div style={{fontSize:32}}>🎉</div>
                 <div style={{fontWeight:900,fontSize:17,marginTop:6}}>Tout est fait !</div>
@@ -288,28 +395,63 @@ export default function App() {
 
         {tab==='tasks' && (
           <div>
-            <button onClick={()=>{setEditTask(null);setNt({name:'',cat:'',freq:'daily',days:[],dom:1,month:0,est:''});setShowAddTask(true);}} style={{...btnStyle(),width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,padding:'12px',marginBottom:14,fontSize:14}}>
-              <Plus size={17}/>Ajouter une tâche
-            </button>
-            {tasks.map(t=>(
-              <div key={t.id} className="task-card" style={{...card,display:'flex',alignItems:'center',gap:12,borderLeft:`4px solid ${t.color||'#C8604A'}`}}>
-                <div style={{flex:1}}>
-                  <div style={{fontWeight:700,fontSize:14}}>{t.name}</div>
-                  <div style={{display:'flex',gap:6,marginTop:4,flexWrap:'wrap',alignItems:'center'}}>
-                    <span style={{background:'#F5F0FA',color:'#9B7BB8',fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99}}>{FREQ[t.freq]}</span>
-                    {(t.freq==='weekly'||t.freq==='biweekly')&&<span style={{fontSize:11,color:'#9C8878'}}>{t.days.map(d=>DS[d]).join(', ')}</span>}
-                    {['monthly','quarterly','biannual'].includes(t.freq)&&<span style={{fontSize:11,color:'#9C8878'}}>le {t.dom}</span>}
-                    {t.freq==='yearly'&&<span style={{fontSize:11,color:'#9C8878'}}>{t.dom} {MO[t.month||0]}</span>}
-                    <span style={{fontSize:11,color:'#9C8878',display:'flex',alignItems:'center',gap:2}}><Clock size={10}/>~{t.est}min</span>
-                    <span style={{background:CAT_BG[t.cat]||'#F5F0FA',color:CAT_TX[t.cat]||'#9B7BB8',fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99}}>{t.cat}</span>
-                  </div>
-                </div>
-                <div style={{display:'flex',gap:4}}>
-                  <button onClick={()=>{setEditTask(t);setNt({name:t.name,cat:t.cat,freq:t.freq,days:t.days||[],dom:t.dom||1,month:t.month||0,est:t.est||15});setShowAddTask(true);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:4}}>✏️</button>
-                  <button onClick={()=>deleteDoc(doc(db,'tasks',t.id))} style={{background:'none',border:'none',cursor:'pointer',color:'#D4C4B0',padding:4}}><Trash2 size={15}/></button>
-                </div>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+              <button onClick={()=>{setEditTask(null);setNt({name:'',cat:'',freq:'daily',days:[],dom:1,month:0,est:'',notes:''});setShowAddTask(true);}} style={{...btnStyle(),display:'flex',alignItems:'center',gap:6,padding:'10px 14px',fontSize:13}}>
+                <Plus size={15}/>Ajouter
+              </button>
+              <div style={{display:'flex',gap:4}}>
+                <button onClick={()=>setTaskSort('freq')} style={{...btnStyle(taskSort==='freq'?'#C8604A':'#FAF6F0',taskSort==='freq'?'#fff':'#9C8878'),fontSize:11,padding:'5px 10px'}}>Fréquence</button>
+                <button onClick={()=>setTaskSort('cat')} style={{...btnStyle(taskSort==='cat'?'#C8604A':'#FAF6F0',taskSort==='cat'?'#fff':'#9C8878'),fontSize:11,padding:'5px 10px'}}>Catégorie</button>
               </div>
-            ))}
+            </div>
+            {taskSort==='freq' ? (
+              Object.entries(groupByKey(sortedTasks,'freq')).map(([freq,freqTasks])=>(
+                <div key={freq}>
+                  <div style={{fontSize:11,fontWeight:800,color:'#9B7BB8',background:'#F5F0FA',padding:'4px 12px',borderRadius:99,display:'inline-block',marginBottom:6,marginTop:4}}>{FREQ[freq]||freq}</div>
+                  {freqTasks.map(t=>(
+                    <div key={t.id} className="task-card" style={{...card,display:'flex',alignItems:'center',gap:12,borderLeft:`4px solid ${t.color||'#C8604A'}`}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontWeight:700,fontSize:14}}>{t.name}</div>
+                        {t.notes&&<div style={{fontSize:11,color:'#9C8878',marginTop:2,fontStyle:'italic',display:'flex',alignItems:'center',gap:4}}><FileText size={10}/>{t.notes}</div>}
+                        <div style={{display:'flex',gap:6,marginTop:4,flexWrap:'wrap',alignItems:'center'}}>
+                          {(t.freq==='weekly'||t.freq==='biweekly')&&<span style={{fontSize:11,color:'#9C8878'}}>{t.days.map(d=>DS[d]).join(', ')}</span>}
+                          {['monthly','quarterly','biannual'].includes(t.freq)&&<span style={{fontSize:11,color:'#9C8878'}}>le {t.dom}</span>}
+                          {t.freq==='yearly'&&<span style={{fontSize:11,color:'#9C8878'}}>{t.dom} {MO[t.month||0]}</span>}
+                          <span style={{fontSize:11,color:'#9C8878',display:'flex',alignItems:'center',gap:2}}><Clock size={10}/>~{t.est}min</span>
+                          <span style={{background:CAT_BG[t.cat]||'#F5F0FA',color:CAT_TX[t.cat]||'#9B7BB8',fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99}}>{t.cat}</span>
+                        </div>
+                      </div>
+                      <div style={{display:'flex',gap:4}}>
+                        <button onClick={()=>{setEditTask(t);setNt({name:t.name,cat:t.cat,freq:t.freq,days:t.days||[],dom:t.dom||1,month:t.month||0,est:t.est||15,notes:t.notes||''});setShowAddTask(true);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:4}}>✏️</button>
+                        <button onClick={()=>deleteDoc(doc(db,'tasks',t.id))} style={{background:'none',border:'none',cursor:'pointer',color:'#D4C4B0',padding:4}}><Trash2 size={15}/></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))
+            ) : (
+              Object.entries(groupByKey(sortedTasks,'cat')).map(([cat,catTasks])=>(
+                <div key={cat}>
+                  <div style={{fontSize:11,fontWeight:800,color:CAT_TX[cat]||'#9B7BB8',background:CAT_BG[cat]||'#F5F0FA',padding:'4px 12px',borderRadius:99,display:'inline-block',marginBottom:6,marginTop:4}}>{cat}</div>
+                  {catTasks.map(t=>(
+                    <div key={t.id} className="task-card" style={{...card,display:'flex',alignItems:'center',gap:12,borderLeft:`4px solid ${t.color||'#C8604A'}`}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontWeight:700,fontSize:14}}>{t.name}</div>
+                        {t.notes&&<div style={{fontSize:11,color:'#9C8878',marginTop:2,fontStyle:'italic',display:'flex',alignItems:'center',gap:4}}><FileText size={10}/>{t.notes}</div>}
+                        <div style={{display:'flex',gap:6,marginTop:4,flexWrap:'wrap',alignItems:'center'}}>
+                          <span style={{background:'#F5F0FA',color:'#9B7BB8',fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99}}>{FREQ[t.freq]}</span>
+                          <span style={{fontSize:11,color:'#9C8878',display:'flex',alignItems:'center',gap:2}}><Clock size={10}/>~{t.est}min</span>
+                        </div>
+                      </div>
+                      <div style={{display:'flex',gap:4}}>
+                        <button onClick={()=>{setEditTask(t);setNt({name:t.name,cat:t.cat,freq:t.freq,days:t.days||[],dom:t.dom||1,month:t.month||0,est:t.est||15,notes:t.notes||''});setShowAddTask(true);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:4}}>✏️</button>
+                        <button onClick={()=>deleteDoc(doc(db,'tasks',t.id))} style={{background:'none',border:'none',cursor:'pointer',color:'#D4C4B0',padding:4}}><Trash2 size={15}/></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))
+            )}
           </div>
         )}
 
@@ -426,16 +568,22 @@ export default function App() {
         <div style={{position:'fixed',inset:0,background:'rgba(61,46,30,0.5)',display:'flex',alignItems:'flex-end',zIndex:200}} onClick={e=>e.target===e.currentTarget&&setCheckModal(null)}>
           <div style={{background:'#fff',borderRadius:'22px 22px 0 0',padding:'26px 20px 36px',width:'100%',maxWidth:480,margin:'0 auto'}}>
             <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:20,marginBottom:4}}>{getTask(checkModal.taskId)?.name}</div>
+            {getTask(checkModal.taskId)?.notes&&(
+              <div style={{background:'#FAF6F0',borderRadius:10,padding:'8px 12px',marginBottom:12,fontSize:12,color:'#9C8878',fontStyle:'italic'}}>
+                📋 {getTask(checkModal.taskId).notes}
+              </div>
+            )}
             <div style={{color:'#9C8878',fontSize:13,marginBottom:18}}>Qui a réalisé cette tâche ?</div>
             <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:20}}>
               {members.map(m=>(<button key={m.id} onClick={()=>setSelMember(m.id)} style={{...btnStyle(selMember===m.id?m.color:'#FAF6F0',selMember===m.id?'#fff':m.color),padding:'9px 16px',display:'flex',alignItems:'center',gap:6,border:`2px solid ${m.color}`}}>{m.emoji} {m.name}</button>))}
             </div>
             <div style={{marginBottom:22}}>
-              <label style={{fontSize:12,fontWeight:800,color:'#9C8878',display:'block',marginBottom:6}}>TEMPS PASSÉ</label>
+              <label style={{fontSize:12,fontWeight:800,color:'#9C8878',display:'block',marginBottom:6}}>TEMPS RÉELLEMENT PASSÉ</label>
               <div style={{display:'flex',alignItems:'center',gap:10}}>
-                <input type="number" value={timeVal} onChange={e=>setTimeVal(e.target.value)} placeholder={`~${getTask(checkModal.taskId)?.est||15}`} style={{...inp,width:100}} min={1} max={300}/>
+                <input type="number" value={timeVal} onChange={e=>setTimeVal(e.target.value)} style={{...inp,width:100}} min={1} max={300}/>
                 <span style={{color:'#9C8878',fontSize:14,fontWeight:600}}>minutes</span>
               </div>
+              <div style={{fontSize:11,color:'#D4C4B0',marginTop:4}}>Estimation : {getTask(checkModal.taskId)?.est||15} min</div>
             </div>
             <button onClick={confirmCheck} disabled={!selMember} style={{...btnStyle(),width:'100%',padding:'14px',fontSize:15,opacity:selMember?1:0.45}}>✓ Confirmer</button>
           </div>
@@ -447,12 +595,16 @@ export default function App() {
           <div style={{background:'#fff',borderRadius:'22px 22px 0 0',padding:'24px 20px 36px',width:'100%',maxWidth:480,margin:'0 auto',maxHeight:'88vh',overflowY:'auto'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:22}}>
               <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:20}}>{editTask?'Modifier la tâche':'Nouvelle tâche'}</div>
-              <button onClick={()=>{setShowAddTask(false);setEditTask(null);setNt({name:'',cat:'',freq:'daily',days:[],dom:1,month:0,est:''}); }} style={{background:'none',border:'none',cursor:'pointer',color:'#9C8878'}}><X size={20}/></button>
+              <button onClick={()=>{setShowAddTask(false);setEditTask(null);setNt({name:'',cat:'',freq:'daily',days:[],dom:1,month:0,est:'',notes:''});}} style={{background:'none',border:'none',cursor:'pointer',color:'#9C8878'}}><X size={20}/></button>
             </div>
             <div style={{display:'flex',flexDirection:'column',gap:14}}>
               <div>
                 <label style={{fontSize:11,fontWeight:800,color:'#9C8878',display:'block',marginBottom:5,letterSpacing:1}}>NOM</label>
                 <input style={inp} value={nt.name} onChange={e=>setNt(p=>({...p,name:e.target.value}))} placeholder="Ex: Faire les vitres"/>
+              </div>
+              <div>
+                <label style={{fontSize:11,fontWeight:800,color:'#9C8878',display:'block',marginBottom:5,letterSpacing:1}}>NOTES (optionnel)</label>
+                <textarea style={{...inp,resize:'vertical',minHeight:60}} value={nt.notes} onChange={e=>setNt(p=>({...p,notes:e.target.value}))} placeholder="Ex: Utiliser le produit vert sous l'évier…"/>
               </div>
               <div>
                 <label style={{fontSize:11,fontWeight:800,color:'#9C8878',display:'block',marginBottom:5,letterSpacing:1}}>CATÉGORIE</label>
