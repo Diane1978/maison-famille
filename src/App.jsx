@@ -1,6 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
 import { CheckCircle, Circle, Clock, ChevronLeft, ChevronRight, Plus, X, Trash2, TrendingUp, CalendarDays, ListTodo, Users, Home } from "lucide-react";
+import { db } from "./firebase";
+import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, setDoc } from "firebase/firestore";
 
 const PALETTE = ['#C8604A','#7BA68A','#D4956A','#5B8DB8','#9B7BB8','#B8A06B'];
 const uid = () => Math.random().toString(36).slice(2,9);
@@ -36,38 +38,6 @@ function weekOf(ref, off=0) {
   return Array.from({length:7},(_,i)=>{ const dd=new Date(d); dd.setDate(dd.getDate()+i); return dd; });
 }
 
-const INIT_MEMBERS = [
-  {id:'m1',name:'Maman',color:'#C8604A',emoji:'👩'},
-  {id:'m2',name:'Emma',color:'#7BA68A',emoji:'👧'},
-  {id:'m3',name:'Léa',color:'#D4956A',emoji:'🧒'},
-  {id:'m4',name:'Zoé',color:'#5B8DB8',emoji:'👶'},
-];
-
-const INIT_TASKS = [
-  {id:'t1',name:'Vaisselle',cat:'Cuisine',freq:'daily',days:[0,1,2,3,4,5,6],dom:null,est:15,color:'#C8604A'},
-  {id:'t2',name:'Aspirateur',cat:'Ménage',freq:'weekly',days:[5],dom:null,est:30,color:'#7BA68A'},
-  {id:'t3',name:'Linge',cat:'Ménage',freq:'weekly',days:[1,4],dom:null,est:45,color:'#D4956A'},
-  {id:'t4',name:'Cuisine du soir',cat:'Cuisine',freq:'daily',days:[0,1,2,3,4,5,6],dom:null,est:40,color:'#5B8DB8'},
-  {id:'t5',name:'Poubelles',cat:'Ménage',freq:'weekly',days:[2],dom:null,est:10,color:'#9B7BB8'},
-  {id:'t6',name:'Salle de bain',cat:'Ménage',freq:'weekly',days:[6],dom:null,est:25,color:'#B8A06B'},
-  {id:'t7',name:'Courses',cat:'Approvisionnement',freq:'weekly',days:[5],dom:null,est:60,color:'#C8604A'},
-  {id:'t8',name:'Sol cuisine',cat:'Ménage',freq:'weekly',days:[6],dom:null,est:20,color:'#7BA68A'},
-];
-
-function genDemo(members, tasks) {
-  const comps = [];
-  for (let ago=28; ago>0; ago--) {
-    const d = new Date(today); d.setDate(d.getDate()-ago);
-    const ds = fmt(d);
-    tasks.forEach(t => {
-      if (!isDue(t,d)||Math.random()<0.12) return;
-      const m = members[Math.floor(Math.random()*members.length)];
-      comps.push({id:uid(),taskId:t.id,memberId:m.id,date:ds,min:Math.max(5,Math.round(t.est*(0.7+Math.random()*0.6)))});
-    });
-  }
-  return comps;
-}
-
 const CAT_BG = {Cuisine:'#FFF0EB',Ménage:'#EDFAF3',Approvisionnement:'#EBF3FA',Général:'#F5F0FA'};
 const CAT_TX = {Cuisine:'#C8604A',Ménage:'#7BA68A',Approvisionnement:'#5B8DB8',Général:'#9B7BB8'};
 const card = {background:'#fff',borderRadius:16,padding:'14px 18px',boxShadow:'0 2px 12px rgba(61,46,30,0.07)',marginBottom:10};
@@ -76,9 +46,10 @@ const inp = {border:'1.5px solid #E8DFCF',borderRadius:10,padding:'9px 12px',fon
 
 export default function App() {
   const [tab, setTab] = useState('today');
-  const [members, setMembers] = useState(INIT_MEMBERS);
-  const [tasks, setTasks] = useState(INIT_TASKS);
-  const [comps, setComps] = useState(() => genDemo(INIT_MEMBERS, INIT_TASKS));
+  const [members, setMembers] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [comps, setComps] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [wkOff, setWkOff] = useState(0);
   const [statMode, setStatMode] = useState('person');
   const [checkModal, setCheckModal] = useState(null);
@@ -90,34 +61,48 @@ export default function App() {
   const [nm, setNm] = useState({name:'',emoji:'👤'});
   const [editTask, setEditTask] = useState(null);
 
+  useEffect(()=>{
+    const u1 = onSnapshot(collection(db,'members'), s=>{
+      setMembers(s.docs.map(d=>({id:d.id,...d.data()})));
+    });
+    const u2 = onSnapshot(collection(db,'tasks'), s=>{
+      setTasks(s.docs.map(d=>({id:d.id,...d.data()})));
+    });
+    const u3 = onSnapshot(collection(db,'completions'), s=>{
+      setComps(s.docs.map(d=>({id:d.id,...d.data()})));
+      setLoading(false);
+    });
+    return ()=>{ u1(); u2(); u3(); };
+  },[]);
+
   const getMember = id => members.find(m=>m.id===id);
   const getTask = id => tasks.find(t=>t.id===id);
   const getComp = (taskId, date) => comps.find(c=>c.taskId===taskId&&c.date===date);
 
-  const todayTasks = useMemo(()=>tasks.filter(t=>isDue(t,today)),[tasks]);
-  const todayComps = useMemo(()=>comps.filter(c=>c.date===todayStr),[comps]);
+  const todayTasks = tasks.filter(t=>isDue(t,today));
+  const todayComps = comps.filter(c=>c.date===todayStr);
   const doneToday = id => todayComps.some(c=>c.taskId===id);
   const doneCount = todayTasks.filter(t=>doneToday(t.id)).length;
   const progress = todayTasks.length ? Math.round(doneCount/todayTasks.length*100) : 0;
 
-  const openCheck = (taskId, date) => {
+  const openCheck = async (taskId, date) => {
     const ex = getComp(taskId, date||todayStr);
-    if (ex) { setComps(p=>p.filter(c=>c.id!==ex.id)); return; }
+    if (ex) { await deleteDoc(doc(db,'completions',ex.id)); return; }
     setCheckModal({taskId, date: date||todayStr});
     setSelMember(members[0]?.id);
     setTimeVal('');
   };
 
-  const confirmCheck = () => {
+  const confirmCheck = async () => {
     if (!selMember||!checkModal) return;
     const t = getTask(checkModal.taskId);
-    setComps(p=>[...p,{id:uid(),taskId:checkModal.taskId,memberId:selMember,date:checkModal.date,min:parseInt(timeVal)||t?.est||15}]);
+    await addDoc(collection(db,'completions'),{taskId:checkModal.taskId,memberId:selMember,date:checkModal.date,min:parseInt(timeVal)||t?.est||15});
     setCheckModal(null);
   };
 
-  const weekDates = useMemo(()=>weekOf(today,wkOff),[wkOff]);
+  const weekDates = weekOf(today,wkOff);
 
-  const stats = useMemo(()=>{
+  const stats = (()=>{
     const recent = comps.filter(c=>(today-new Date(c.date))/864e5<=28);
     const byPerson = members.map(m=>({
       name:m.name, color:m.color,
@@ -137,24 +122,25 @@ export default function App() {
       return entry;
     });
     return {byPerson,byTask,byWeek};
-  },[comps,members,tasks]);
+  })();
 
-  const doAddTask = () => {
+  const doAddTask = async () => {
     if (!nt.name.trim()) return;
     const estVal = parseInt(nt.est)||15;
+    const data = {name:nt.name,cat:nt.cat||'Général',freq:nt.freq,days:(nt.freq==='weekly'||nt.freq==='biweekly')?nt.days:[0,1,2,3,4,5,6],dom:nt.dom,month:nt.month||0,anchor:todayStr,est:estVal,color:PALETTE[tasks.length%PALETTE.length]};
     if (editTask) {
-      setTasks(p=>p.map(t=>t.id===editTask.id?{...t,name:nt.name,cat:nt.cat||'Général',freq:nt.freq,days:(nt.freq==='weekly'||nt.freq==='biweekly')?nt.days:[0,1,2,3,4,5,6],dom:nt.dom,month:nt.month||0,est:estVal}:t));
+      await updateDoc(doc(db,'tasks',editTask.id), data);
       setEditTask(null);
     } else {
-      setTasks(p=>[...p,{id:uid(),name:nt.name,cat:nt.cat||'Général',freq:nt.freq,days:(nt.freq==='weekly'||nt.freq==='biweekly')?nt.days:[0,1,2,3,4,5,6],dom:nt.dom,month:nt.month||0,anchor:todayStr,est:estVal,color:PALETTE[p.length%PALETTE.length]}]);
+      await addDoc(collection(db,'tasks'), data);
     }
     setNt({name:'',cat:'',freq:'daily',days:[],dom:1,month:0,est:''});
     setShowAddTask(false);
   };
 
-  const doAddMember = () => {
+  const doAddMember = async () => {
     if (!nm.name.trim()) return;
-    setMembers(p=>[...p,{id:uid(),name:nm.name,color:PALETTE[p.length%PALETTE.length],emoji:nm.emoji||'👤'}]);
+    await addDoc(collection(db,'members'),{name:nm.name,color:PALETTE[members.length%PALETTE.length],emoji:nm.emoji||'👤'});
     setNm({name:'',emoji:'👤'}); setShowAddMember(false);
   };
 
@@ -165,6 +151,12 @@ export default function App() {
     {id:'stats',label:'Stats',icon:<TrendingUp size={17}/>},
     {id:'family',label:'Famille',icon:<Users size={17}/>},
   ];
+
+  if (loading) return (
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',fontFamily:'Nunito,sans-serif',color:'#C8604A',fontSize:18,fontWeight:800}}>
+      Chargement… 🏠
+    </div>
+  );
 
   return (
     <div style={{fontFamily:"'Nunito',sans-serif",background:'#FAF6F0',minHeight:'100vh',color:'#3D2E1E',maxWidth:480,margin:'0 auto',paddingBottom:80}}>
@@ -201,7 +193,6 @@ export default function App() {
       </div>
 
       <div style={{padding:'16px 14px 0'}}>
-
         {tab==='today' && (
           <div>
             <div style={{fontSize:12,fontWeight:800,color:'#9C8878',textTransform:'uppercase',letterSpacing:1.5,marginBottom:12}}>{doneCount}/{todayTasks.length} complétées</div>
@@ -314,7 +305,7 @@ export default function App() {
                 </div>
                 <div style={{display:'flex',gap:4}}>
                   <button onClick={()=>{setEditTask(t);setNt({name:t.name,cat:t.cat,freq:t.freq,days:t.days||[],dom:t.dom||1,month:t.month||0,est:t.est||15});setShowAddTask(true);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:4}}>✏️</button>
-                  <button onClick={()=>setTasks(p=>p.filter(x=>x.id!==t.id))} style={{background:'none',border:'none',cursor:'pointer',color:'#D4C4B0',padding:4}}><Trash2 size={15}/></button>
+                  <button onClick={()=>deleteDoc(doc(db,'tasks',t.id))} style={{background:'none',border:'none',cursor:'pointer',color:'#D4C4B0',padding:4}}><Trash2 size={15}/></button>
                 </div>
               </div>
             ))}
@@ -325,7 +316,7 @@ export default function App() {
           <div>
             <div style={{display:'flex',gap:6,marginBottom:14}}>
               {[['person','Personnes'],['task','Tâches'],['week','Semaines']].map(([m,l])=>(
-                <button key={m} onClick={()=>setStatMode(m)} style={{...btnStyle(statMode===m?'#C8604A':'#fff',statMode===m?'#fff':'#9C8878'),flex:1,fontSize:12,padding:'8px 4px',boxShadow:'0 1px 4px rgba(61,46,30,0.08)'}}>{l}</button>
+                <button key={m} onClick={()=>setStatMode(m)} style={{...btnStyle(statMode===m?'#C8604A':'#fff',statMode===m?'#fff':'#9C8878'),flex:1,fontSize:12,padding:'8px 4px'}}>{l}</button>
               ))}
             </div>
             {statMode==='person'&&(
@@ -335,9 +326,9 @@ export default function App() {
                   <ResponsiveContainer width="100%" height={190}>
                     <BarChart data={stats.byPerson} margin={{top:0,right:0,bottom:0,left:-25}}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#F0E8DC"/>
-                      <XAxis dataKey="name" tick={{fontSize:12,fontFamily:'Nunito'}}/>
+                      <XAxis dataKey="name" tick={{fontSize:12}}/>
                       <YAxis tick={{fontSize:10}} unit="m"/>
-                      <Tooltip formatter={v=>[`${v} min`,'Temps']} contentStyle={{fontFamily:'Nunito',borderRadius:10,border:'none'}}/>
+                      <Tooltip formatter={v=>[`${v} min`,'Temps']}/>
                       <Bar dataKey="minutes" radius={[6,6,0,0]}>{stats.byPerson.map((p,i)=><Cell key={i} fill={p.color}/>)}</Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -370,8 +361,8 @@ export default function App() {
                   <BarChart data={stats.byTask} layout="vertical" margin={{top:0,right:30,bottom:0,left:70}}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#F0E8DC"/>
                     <XAxis type="number" tick={{fontSize:10}} unit="m"/>
-                    <YAxis type="category" dataKey="name" tick={{fontSize:11,fontFamily:'Nunito'}} width={70}/>
-                    <Tooltip formatter={v=>[`${v} min`,'Temps']} contentStyle={{fontFamily:'Nunito',borderRadius:10,border:'none'}}/>
+                    <YAxis type="category" dataKey="name" tick={{fontSize:11}} width={70}/>
+                    <Tooltip formatter={v=>[`${v} min`,'Temps']}/>
                     <Bar dataKey="minutes" radius={[0,6,6,0]}>{stats.byTask.map((t,i)=><Cell key={i} fill={t.color||PALETTE[i%PALETTE.length]}/>)}</Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -383,10 +374,10 @@ export default function App() {
                 <ResponsiveContainer width="100%" height={260}>
                   <LineChart data={stats.byWeek} margin={{top:0,right:10,bottom:0,left:-20}}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#F0E8DC"/>
-                    <XAxis dataKey="label" tick={{fontSize:12,fontFamily:'Nunito'}}/>
+                    <XAxis dataKey="label" tick={{fontSize:12}}/>
                     <YAxis tick={{fontSize:10}} unit="m"/>
-                    <Tooltip formatter={v=>[`${v} min`]} contentStyle={{fontFamily:'Nunito',borderRadius:10,border:'none'}}/>
-                    <Legend wrapperStyle={{fontFamily:'Nunito',fontSize:12}}/>
+                    <Tooltip formatter={v=>[`${v} min`]}/>
+                    <Legend/>
                     {members.map(m=>(<Line key={m.id} type="monotone" dataKey={m.name} stroke={m.color} strokeWidth={2.5} dot={{r:4,fill:m.color}}/>))}
                   </LineChart>
                 </ResponsiveContainer>
@@ -412,7 +403,7 @@ export default function App() {
                     <div style={{fontSize:12,color:'#9C8878',marginTop:2}}>{mComps.length} tâches · {Math.floor(totalMin/60)}h{totalMin%60?` ${totalMin%60}min`:''}</div>
                     <div style={{fontSize:11,color:'#9C8878'}}>Cette semaine : {thisWeek.length} tâches</div>
                   </div>
-                  {members.length>1&&<button onClick={()=>setMembers(p=>p.filter(x=>x.id!==m.id))} style={{background:'none',border:'none',cursor:'pointer',color:'#D4C4B0',padding:4}}><Trash2 size={15}/></button>}
+                  {members.length>1&&<button onClick={()=>deleteDoc(doc(db,'members',m.id))} style={{background:'none',border:'none',cursor:'pointer',color:'#D4C4B0',padding:4}}><Trash2 size={15}/></button>}
                 </div>
               );
             })}
