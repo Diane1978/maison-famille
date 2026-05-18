@@ -10,8 +10,8 @@ const today = new Date();
 const todayStr = fmt(today);
 const dow = d => (d.getDay()+6)%7;
 
-const FREQ = { daily:'Quotidien', weekly:'Hebdomadaire', biweekly:'Bimensuel', monthly:'Mensuel', quarterly:'Trimestriel', biannual:'Semestriel', yearly:'Annuel' };
-const FREQ_ORDER = ['daily','weekly','biweekly','monthly','quarterly','biannual','yearly'];
+const FREQ = { daily:'Quotidien', weekly:'Hebdomadaire', biweekly:'Bimensuel', monthly:'Mensuel', quarterly:'Trimestriel', biannual:'Semestriel', yearly:'Annuel', once:'Ponctuel' };
+const FREQ_ORDER = ['daily','weekly','biweekly','monthly','quarterly','biannual','yearly','once'];
 const DS = ['Lu','Ma','Me','Je','Ve','Sa','Di'];
 const DF = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
 const MO = ['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
@@ -29,6 +29,7 @@ function isDue(t, date) {
   if (t.freq==='quarterly') return date.getDate()===t.dom && [0,3,6,9].includes(date.getMonth());
   if (t.freq==='biannual') return date.getDate()===t.dom && [0,6].includes(date.getMonth());
   if (t.freq==='yearly') return date.getDate()===t.dom && date.getMonth()===(t.month||0);
+  if (t.freq==='once') return true;
   return false;
 }
 
@@ -94,8 +95,10 @@ export default function App() {
   const todayTasks = tasks.filter(t=>isDue(t,today) && !isSkipped(t.id,todayStr));
   const todayComps = comps.filter(c=>c.date===todayStr);
   const doneToday = id => todayComps.some(c=>c.taskId===id&&!c.skipped);
-  const doneCount = todayTasks.filter(t=>doneToday(t.id)).length;
-  const progress = todayTasks.length ? Math.round(doneCount/todayTasks.length*100) : 0;
+  const doneByMember = (taskId, date, memberId) => comps.some(c=>c.taskId===taskId&&c.date===date&&c.memberId===memberId&&!c.skipped);
+  const visibleTodayTasks = todayTasks.filter(t=>!(t.freq==='once' && doneToday(t.id)));
+  const doneCount = visibleTodayTasks.filter(t=>doneToday(t.id)).length;
+  const progress = visibleTodayTasks.length ? Math.round(doneCount/visibleTodayTasks.length*100) : 0;
 
   const overdueTasks = (() => {
     const result = [];
@@ -112,7 +115,7 @@ export default function App() {
     return result;
   })();
 
-  const sortedTodayTasks = [...todayTasks].sort((a,b)=>{
+  const sortedTodayTasks = [...visibleTodayTasks].sort((a,b)=>{
     if (todaySort==='cat') return (a.cat||'').localeCompare(b.cat||'');
     if (todaySort==='freq') return FREQ_ORDER.indexOf(a.freq)-FREQ_ORDER.indexOf(b.freq);
     return 0;
@@ -125,19 +128,26 @@ export default function App() {
   });
 
   const openCheck = async (taskId, date) => {
-    const ex = getComp(taskId, date||todayStr);
-    if (ex) { await deleteDoc(doc(db,'completions',ex.id)); return; }
     setCheckModal({taskId, date: date||todayStr});
     setSelMember(members[0]?.id);
     const t = tasks.find(t=>t.id===taskId);
     setTimeVal(t?.est ? String(t.est) : '');
   };
 
+  const removeComp = async (compId) => {
+    await deleteDoc(doc(db,'completions',compId));
+  };
+
   const confirmCheck = async () => {
     if (!selMember||!checkModal) return;
     const t = getTask(checkModal.taskId);
     const mins = parseInt(timeVal)||t?.est||15;
-    await addDoc(collection(db,'completions'),{taskId:checkModal.taskId,memberId:selMember,date:checkModal.date,min:mins});
+    const existing = comps.find(c=>c.taskId===checkModal.taskId&&c.date===checkModal.date&&c.memberId===selMember&&!c.skipped);
+    if (existing) {
+      await updateDoc(doc(db,'completions',existing.id),{min:mins});
+    } else {
+      await addDoc(collection(db,'completions'),{taskId:checkModal.taskId,memberId:selMember,date:checkModal.date,min:mins,skipped:false});
+    }
     setCheckModal(null);
   };
 
@@ -227,7 +237,7 @@ export default function App() {
           </div>
           <div style={{textAlign:'right'}}>
             <div style={{fontSize:30,fontWeight:900,lineHeight:1}}>{progress}%</div>
-            <div style={{fontSize:11,opacity:0.8}}>{doneCount}/{todayTasks.length} tâches</div>
+            <div style={{fontSize:11,opacity:0.8}}>{doneCount}/{visibleTodayTasks.length} tâches</div>
           </div>
         </div>
         <div style={{marginTop:14,background:'rgba(255,255,255,0.25)',borderRadius:99,height:7,overflow:'hidden'}}>
@@ -245,13 +255,13 @@ export default function App() {
         {tab==='today' && (
           <div>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-              <div style={{fontSize:12,fontWeight:800,color:'#9C8878',textTransform:'uppercase',letterSpacing:1.5}}>{doneCount}/{todayTasks.length} complétées</div>
+              <div style={{fontSize:12,fontWeight:800,color:'#9C8878',textTransform:'uppercase',letterSpacing:1.5}}>{doneCount}/{visibleTodayTasks.length} complétées</div>
               <div style={{display:'flex',gap:4}}>
                 <button onClick={()=>setTodaySort('cat')} style={{...btnStyle(todaySort==='cat'?'#C8604A':'#FAF6F0',todaySort==='cat'?'#fff':'#9C8878'),fontSize:11,padding:'5px 10px'}}>Catégorie</button>
                 <button onClick={()=>setTodaySort('freq')} style={{...btnStyle(todaySort==='freq'?'#C8604A':'#FAF6F0',todaySort==='freq'?'#fff':'#9C8878'),fontSize:11,padding:'5px 10px'}}>Fréquence</button>
               </div>
             </div>
-            {todayTasks.length===0&&<div style={{...card,textAlign:'center',color:'#9C8878',fontSize:15,padding:30}}>Aucune tâche aujourd'hui 🎉</div>}
+            {visibleTodayTasks.length===0&&<div style={{...card,textAlign:'center',color:'#9C8878',fontSize:15,padding:30}}>Aucune tâche aujourd'hui 🎉</div>}
             {todaySort==='cat' ? (
               Object.entries(groupByKey(sortedTodayTasks,'cat')).map(([cat,catTasks])=>(
                 <div key={cat}>
@@ -271,7 +281,7 @@ export default function App() {
                             {done&&who&&<span style={{fontSize:12,fontWeight:800,color:who.color}}>{who.emoji} {who.name} · {comp.min}min</span>}
                           </div>
                         </div>
-                        {!done&&<button onClick={()=>skipTask(task.id,todayStr)} title="Ignorer aujourd'hui" style={{background:'none',border:'none',cursor:'pointer',color:'#D4C4B0',padding:4,fontSize:16}}>🚫</button>}
+                        {!done&&<button onClick={()=>skipTask(task.id,todayStr)} title="Ignorer aujourd'hui" style={{background:'none',border:'none',cursor:'pointer',color:'#E88080',padding:4,fontWeight:900,fontSize:15}}>✕</button>}
                       </div>
                     );
                   })}
@@ -294,10 +304,27 @@ export default function App() {
                         {done&&who&&<span style={{fontSize:12,fontWeight:800,color:who.color}}>{who.emoji} {who.name} · {comp.min}min</span>}
                       </div>
                     </div>
-                    {!done&&<button onClick={()=>skipTask(task.id,todayStr)} title="Ignorer aujourd'hui" style={{background:'none',border:'none',cursor:'pointer',color:'#D4C4B0',padding:4,fontSize:16}}>🚫</button>}
+                    {!done&&<button onClick={()=>skipTask(task.id,todayStr)} title="Ignorer aujourd'hui" style={{background:'none',border:'none',cursor:'pointer',color:'#E88080',padding:4,fontWeight:900,fontSize:15}}>✕</button>}
                   </div>
                 );
               })
+            )}
+            {comps.filter(c=>c.date===todayStr&&c.skipped).length>0&&(
+              <div style={{marginBottom:8}}>
+                <div style={{fontSize:12,fontWeight:800,color:'#9C8878',textTransform:'uppercase',letterSpacing:1,marginBottom:6}}>
+                  Ignorées aujourd'hui
+                </div>
+                {comps.filter(c=>c.date===todayStr&&c.skipped).map(c=>{
+                  const t=getTask(c.taskId);
+                  if(!t) return null;
+                  return (
+                    <div key={c.id} style={{...card,display:'flex',alignItems:'center',gap:10,opacity:0.7,marginBottom:6,padding:'10px 14px'}}>
+                      <span style={{flex:1,fontSize:13,color:'#9C8878',textDecoration:'line-through'}}>{t.name}</span>
+                      <button onClick={()=>removeComp(c.id)} style={{...btnStyle('#FAF6F0','#7BA68A'),fontSize:11,padding:'5px 10px',border:'1.5px solid #7BA68A'}}>↩ Récupérer</button>
+                    </div>
+                  );
+                })}
+              </div>
             )}
             {overdueTasks.length>0&&(
               <div style={{marginTop:8}}>
@@ -318,12 +345,12 @@ export default function App() {
                         <span style={{background:CAT_BG[task.cat]||'#F5F0FA',color:CAT_TX[task.cat]||'#9B7BB8',fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99}}>{task.cat}</span>
                       </div>
                     </div>
-                    <button onClick={()=>skipTask(task.id,task.overdueDate)} title="Ignorer" style={{background:'none',border:'none',cursor:'pointer',color:'#D4C4B0',padding:4,fontSize:14}}>🚫</button>
+                    <button onClick={()=>skipTask(task.id,task.overdueDate)} style={{background:'none',border:'none',cursor:'pointer',color:'#E88080',padding:4,fontWeight:900,fontSize:15}}>✕</button>
                   </div>
                 ))}
               </div>
             )}
-            {doneCount===todayTasks.length&&todayTasks.length>0&&overdueTasks.length===0&&(
+            {doneCount===visibleTodayTasks.length&&visibleTodayTasks.length>0&&overdueTasks.length===0&&(
               <div style={{...card,background:'linear-gradient(135deg,#7BA68A,#5B8A7A)',color:'#fff',textAlign:'center',padding:28,borderLeft:'none'}}>
                 <div style={{fontSize:32}}>🎉</div>
                 <div style={{fontWeight:900,fontSize:17,marginTop:6}}>Tout est fait !</div>
@@ -573,7 +600,24 @@ export default function App() {
                 📋 {getTask(checkModal.taskId).notes}
               </div>
             )}
-            <div style={{color:'#9C8878',fontSize:13,marginBottom:18}}>Qui a réalisé cette tâche ?</div>
+            <div style={{color:'#9C8878',fontSize:13,marginBottom:10}}>Qui a réalisé cette tâche ?</div>
+            {getComps(checkModal.taskId,checkModal.date).length>0&&(
+              <div style={{marginBottom:14}}>
+                <div style={{fontSize:11,fontWeight:800,color:'#9C8878',marginBottom:6,textTransform:'uppercase',letterSpacing:1}}>Déjà enregistré</div>
+                {getComps(checkModal.taskId,checkModal.date).map(c=>{
+                  const who=getMember(c.memberId);
+                  return who?(
+                    <div key={c.id} style={{display:'flex',alignItems:'center',gap:8,background:'#EDF7F1',borderRadius:10,padding:'8px 12px',marginBottom:6}}>
+                      <span style={{fontSize:16}}>{who.emoji}</span>
+                      <span style={{fontWeight:700,color:who.color,flex:1}}>{who.name}</span>
+                      <span style={{fontSize:12,color:'#9C8878'}}>{c.min} min</span>
+                      <button onClick={()=>removeComp(c.id)} style={{background:'none',border:'none',cursor:'pointer',color:'#E88080',fontWeight:900,fontSize:14,padding:'2px 6px'}}>✕</button>
+                    </div>
+                  ):null;
+                })}
+              </div>
+            )}
+            <div style={{fontSize:11,fontWeight:800,color:'#9C8878',marginBottom:8,textTransform:'uppercase',letterSpacing:1}}>Ajouter une participation</div>
             <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:20}}>
               {members.map(m=>(<button key={m.id} onClick={()=>setSelMember(m.id)} style={{...btnStyle(selMember===m.id?m.color:'#FAF6F0',selMember===m.id?'#fff':m.color),padding:'9px 16px',display:'flex',alignItems:'center',gap:6,border:`2px solid ${m.color}`}}>{m.emoji} {m.name}</button>))}
             </div>
