@@ -82,7 +82,8 @@ export default function App() {
 
   const getMember = id => members.find(m=>m.id===id);
   const getTask = id => tasks.find(t=>t.id===id);
-  const getComp = (taskId, date) => comps.find(c=>c.taskId===taskId&&c.date===date);
+  const getComp = (taskId, date) => comps.find(c=>c.taskId===taskId&&c.date===date&&!c.skipped);
+  const getComps = (taskId, date) => comps.filter(c=>c.taskId===taskId&&c.date===date&&!c.skipped);
 
   const isSkipped = (taskId, date) => comps.some(c=>c.taskId===taskId&&c.date===date&&c.skipped);
 
